@@ -1363,20 +1363,31 @@
     Because Galileo is higher, its signals are slightly weaker but
     cover higher latitudes better (important for northern Europe!).
   */
-  async function loadConstellation(constellation) {
-    const url = `https://celestrak.org/GNSS/table.php?constellation=${constellation}&format=TLE`;
+  async function fetchTLE(url, timeoutMs=8000) {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const text = await fetch(url).then(r => {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-      });
-      const parsed = parseTLE(text, constellation);
-      if (parsed.length === 0) throw new Error('No TLEs parsed');
-      return parsed;
-    } catch(err) {
-      console.error(`${constellation} TLE fetch error:`, err);
-      return [];
+      const r = await fetch(url, { signal: ctrl.signal });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.text();
+    } finally { clearTimeout(tid); }
+  }
+
+  async function loadConstellation(constellation) {
+    const direct  = `https://celestrak.org/GNSS/table.php?constellation=${constellation}&format=TLE`;
+    const proxy   = `https://corsproxy.io/?url=${encodeURIComponent(direct)}`;
+    const proxy2  = `https://api.allorigins.win/raw?url=${encodeURIComponent(direct)}`;
+    for (const url of [direct, proxy, proxy2]) {
+      try {
+        const text   = await fetchTLE(url);
+        const parsed = parseTLE(text, constellation);
+        if (parsed.length > 0) return parsed;
+      } catch(err) {
+        console.warn(`TLE source failed (${url.slice(0,50)}…):`, err.message);
+      }
     }
+    console.error(`All TLE sources failed for ${constellation}`);
+    return [];
   }
 
   async function loadAllTLE() {
