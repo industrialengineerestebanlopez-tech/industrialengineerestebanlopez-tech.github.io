@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Javier Esteban Porras López — CV (Industrial Engineering)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --navy: #0b1f3a;
+    --accent: #2e7d52;
+    --accent2: #3aaa6e;
+    --muted: #5b6b7f;
+    --line: #e3e9f0;
+    --bg: #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, Arial, sans-serif;
+    font-size: 10.5pt;
+    color: #1a2332;
+    background: var(--bg);
+    line-height: 1.5;
+  }
+
+  .page {
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 16mm 18mm 14mm 18mm;
+  }
+
+  /* ── HEADER ── */
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .header-left h1 { font-size: 22pt; font-weight: 700; color: var(--navy); letter-spacing: -0.5px; line-height: 1.1; }
+  .header-left .title { font-size: 11pt; color: var(--accent); font-weight: 600; margin-top: 3px; }
+  .header-right { text-align: right; font-size: 9pt; color: var(--muted); line-height: 1.8; }
+  .header-right a { color: var(--accent); text-decoration: none; }
+
+  .divider { border: none; border-top: 2.5px solid var(--accent2); margin: 10px 0 14px 0; }
+
+  /* ── SUMMARY ── */
+  .summary {
+    background: #f0fdf5;
+    border-left: 3.5px solid var(--accent2);
+    padding: 9px 12px;
+    border-radius: 0 6px 6px 0;
+    font-size: 9.5pt;
+    color: #2a3d52;
+    margin-bottom: 16px;
+    line-height: 1.55;
+  }
+
+  /* ── SECTIONS ── */
+  section { margin-bottom: 14px; }
+  .sec-title {
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 7px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 3px;
+  }
+
+  /* ── EXPERIENCE / EDUCATION rows ── */
+  .entry { display: flex; justify-content: space-between; margin-bottom: 9px; }
+  .entry-left { flex: 1 1 auto; }
+  .entry-right { flex: 0 0 auto; text-align: right; font-size: 9pt; color: var(--muted); white-space: nowrap; margin-left: 12px; }
+  .entry-org { font-weight: 600; font-size: 10pt; color: var(--navy); }
+  .entry-role { font-size: 9.5pt; color: #2a3d52; font-weight: 500; }
+  .entry-detail { font-size: 9pt; color: var(--muted); margin-top: 2px; }
+  .entry ul { margin: 4px 0 0 14px; }
+  .entry ul li { font-size: 9pt; color: #37475a; margin-bottom: 2px; }
+
+  /* ── SKILLS GRID ── */
+  .skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .skill-group h4 { font-size: 8.5pt; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+  .skill-group p { font-size: 9pt; color: #37475a; line-height: 1.6; }
+
+  /* ── PROJECTS ── */
+  .projects-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .proj {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 9pt;
+  }
+  .proj strong { font-size: 9pt; color: var(--navy); display: block; margin-bottom: 2px; }
+  .proj span { color: var(--muted); font-size: 8.5pt; }
+
+  /* ── LANGUAGES ── */
+  .lang-row { display: flex; gap: 20px; }
+  .lang-item { font-size: 9.5pt; }
+  .lang-item strong { color: var(--navy); }
+  .lang-item span { color: var(--muted); }
+
+  /* ── BADGES ── */
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .badge {
+    background: #f0fdf5;
+    border: 1px solid #b8e8cc;
+    color: #1e6b42;
+    font-size: 8pt;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  /* ── PRINT ── */
+  @media print {
+    body { font-size: 10pt; }
+    .page { padding: 12mm 16mm; }
+    .no-print { display: none; }
+    a { color: inherit !important; }
+  }
+
+  @page { size: A4; margin: 0; }
+
+  /* ── SCREEN ONLY ── */
+  @media screen {
+    body { background: #f0f2f5; }
+    .page { box-shadow: 0 4px 30px rgba(0,0,0,.12); margin: 20px auto; }
+    .print-btn {
+      position: fixed; top: 16px; right: 16px;
+      background: var(--accent); color: white;
+      border: none; padding: 10px 18px; border-radius: 8px;
+      font-weight: 600; font-size: .9rem; cursor: pointer;
+      box-shadow: 0 4px 14px rgba(46,125,82,.4);
+    }
+    .alt-cv {
+      position: fixed; top: 56px; right: 16px;
+      background: var(--navy); color: white;
+      border: none; padding: 8px 16px; border-radius: 8px;
+      font-weight: 500; font-size: .82rem; cursor: pointer; text-decoration: none;
+      display: block; text-align: center; margin-top: 8px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">⬇ Download PDF</button>
+<a class="alt-cv no-print" href="cv-gnss.html">Switch → GNSS CV</a>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <h1>Javier Esteban<br>Porras López</h1>
+      <div class="title">Junior Industrial &amp; Manufacturing Engineer</div>
+    </div>
+    <div class="header-right">
+      industrialengineerestebanlopez@gmail.com<br>
+      <a href="https://industrialengineerestebanlopez-tech.github.io/">Portfolio →</a><br>
+      Grünstadt, Germany<br>
+      LinkedIn: /in/esteban-porras-lopez
+    </div>
+  </div>
+
+  <hr class="divider"/>
+
+  <!-- SUMMARY -->
+  <div class="summary">
+    Industrial Engineer (B.Sc., 240 ECTS) with hands-on experience in FEA, CFD, CAM/CNC, OEE and reliability engineering.
+    Honours in Calculus, Advanced Physics and Operations Research. Completed degree fully alongside full-time employment in Germany.
+    Familiar with lean manufacturing, TPM, maintenance planning and data-driven process improvement.
+    Based in Germany (B2 German, C1 English), open to relocation across Europe, immediately available.
+  </div>
+
+  <!-- EDUCATION -->
+  <section>
+    <div class="sec-title">Education</div>
+
+    <div class="entry">
+      <div class="entry-left">
+        <div class="entry-org">B.Sc. Industrial Engineering — 240 ECTS</div>
+        <div class="entry-role">Universidad Internacional de Valencia (VIU)</div>
+        <div class="entry-detail">
+          Matrícula de Honor (highest distinction): Calculus I &amp; III · Advanced Physics · Operations Research · Electrical Technology<br>
+          Thesis: System-Performance Optimization of a high-speed packaging line (OEE · MTBF/MTTR · Pareto · cost model)
+        </div>
+      </div>
+      <div class="entry-right">2023 — 2026</div>
+    </div>
+
+    <div class="entry">
+      <div class="entry-left">
+        <div class="entry-org">JSNP — Industrial Master in GNSS (in progress)</div>
+        <div class="entry-role">GNSS Academy · ESA-led curriculum</div>
+        <div class="entry-detail">Satellite navigation · Orbit determination · Positioning performance — adds a quantitative, systems layer to the engineering base</div>
+      </div>
+      <div class="entry-right">2026</div>
+    </div>
+
+    <div class="entry">
+      <div class="entry-left">
+        <div class="entry-org">Higher VET — Administration &amp; Finance</div>
+        <div class="entry-role">IES Valle-Inclán, Madrid</div>
+      </div>
+      <div class="entry-right">2013 — 2015</div>
+    </div>
+  </section>
+
+  <!-- CERTIFICATIONS & AWARDS -->
+  <section>
+    <div class="sec-title">Certifications &amp; Awards</div>
+    <div class="badges">
+      <span class="badge">🏆 1st Place — Mirtale CubeSat CAD Competition 2024</span>
+      <span class="badge">CSWA — Certified SolidWorks Associate (Dassault Systèmes, 2024)</span>
+      <span class="badge">MATLAB Core Skills (MathWorks, 2026)</span>
+    </div>
+  </section>
+
+  <!-- SKILLS -->
+  <section>
+    <div class="sec-title">Technical Skills</div>
+    <div class="skills-grid">
+      <div class="skill-group">
+        <h4>⚙️ Industrial Engineering</h4>
+        <p>OEE · KPI dashboards · Pareto analysis · MTBF/MTTR · CMMS · Maintenance planning · Lean / TPM / 5S · Operations Research · Linear Programming · Queuing theory</p>
+      </div>
+      <div class="skill-group">
+        <h4>📐 CAD / CAE / Manufacturing</h4>
+        <p>SolidWorks (CSWA) · FEA (Simulation) · SimScale (CFD) · AutoCAD / ZWCAD · CAM / CNC · NC-code · GD&amp;T · Tolerancing</p>
+      </div>
+      <div class="skill-group">
+        <h4>💻 Programming &amp; Data</h4>
+        <p>Python (pandas, NumPy) · MATLAB · Excel Solver · Power BI · Statistics · LaTeX · SAP (basic)</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- KEY PROJECTS -->
+  <section>
+    <div class="sec-title">Selected Projects</div>
+    <div class="projects-grid">
+      <div class="proj">
+        <strong>⭐ Bachelor Thesis — Packaging Line Optimization (2025–26)</strong>
+        Full year of real plant data: OEE, Pareto, MTBF/MTTR and a counterfactual cost model on a Marchesini MA352 cartoning line.
+        <br><span>OEE · Reliability · Pareto · Data Analysis · Cost &amp; LCA</span>
+      </div>
+      <div class="proj">
+        <strong>Industrial Maintenance Plan — Helmet Factory (2025)</strong>
+        23 assets ranked by criticality; failure Pareto validated; dated KPI-driven preventive schedule built.
+        <br><span>Maintenance Plan · Criticality · TPM / 5S · KPIs</span>
+      </div>
+      <div class="proj">
+        <strong>CAM / CNC Machined Bracket — AISI 1020 (2025)</strong>
+        SolidWorks model to full CNC program: tool selection, toolpaths, drilling, grinding — simulated and verified.
+        <br><span>CAD/CAM · CNC · NC-code · Tolerances</span>
+      </div>
+      <div class="proj">
+        <strong>Wind-Turbine Siting — CFD (2024)</strong>
+        Terrain scaled 1:100 with Re similarity; optimal zone found in SimScale; 12 MW turbine selected and ground reshaped.
+        <br><span>CFD · SimScale · SolidWorks · Wind Energy</span>
+      </div>
+      <div class="proj">
+        <strong>Operations Research — LP &amp; Assignment (2025)</strong>
+        Simplex, two-phase, Big-M, transportation, Hungarian method — real 6×6 assignment solved to optimality in Excel Solver.
+        <br><span>Linear Programming · Simplex · Excel Solver</span>
+      </div>
+      <div class="proj">
+        <strong>Air-Quality Data Analysis — Python (2023)</strong>
+        34 944 raw NO₂ readings: IQR cleaning, legal-limit analysis, Power BI dashboards.
+        <br><span>Python · pandas · Power BI · Statistics</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXPERIENCE -->
+  <section>
+    <div class="sec-title">Professional Experience</div>
+
+    <div class="entry">
+      <div class="entry-left">
+        <div class="entry-org">Professional Driver — Public Transport</div>
+        <div class="entry-role">Behles Bus GmbH · Grünstadt, Germany</div>
+        <ul>
+          <li>Safety-critical, zero-defect operation to German regulatory standards under time pressure</li>
+          <li>Self-funded full B.Sc. degree and ongoing master in parallel — demonstrating exceptional focus and reliability</li>
+        </ul>
+      </div>
+      <div class="entry-right">2019 — present</div>
+    </div>
+
+    <div class="entry">
+      <div class="entry-left">
+        <div class="entry-org">Trainer / Instructor</div>
+        <div class="entry-role">VIPS Restaurants · Madrid, Spain</div>
+        <ul>
+          <li>Authored employee handbook; onboarded and trained new staff; standardized operational procedures</li>
+        </ul>
+      </div>
+      <div class="entry-right">2017 — 2018</div>
+    </div>
+
+    <div class="entry">
+      <div class="entry-left">
+        <div class="entry-org">Commercial Administrative Assistant</div>
+        <div class="entry-role">Newrest · Madrid, Spain</div>
+        <ul>
+          <li>Procurement and operations support: quotations, supplier contact, master-data management</li>
+        </ul>
+      </div>
+      <div class="entry-right">2016 — 2017</div>
+    </div>
+
+    <div class="entry">
+      <div class="entry-left">
+        <div class="entry-org">Accounting Intern (SAP)</div>
+        <div class="entry-role">Gestoría Mateo · Madrid, Spain</div>
+        <ul>
+          <li>Bookkeeping, payroll and quarterly VAT using SAP — 6-month full-time internship</li>
+        </ul>
+      </div>
+      <div class="entry-right">2015 (6 months)</div>
+    </div>
+  </section>
+
+  <!-- LANGUAGES -->
+  <section>
+    <div class="sec-title">Languages</div>
+    <div class="lang-row">
+      <div class="lang-item"><strong>Spanish</strong> <span>Native</span></div>
+      <div class="lang-item"><strong>German</strong> <span>B2</span></div>
+      <div class="lang-item"><strong>English</strong> <span>C1</span></div>
+      <div class="lang-item"><strong>French</strong> <span>A1 (learning)</span></div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
