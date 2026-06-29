@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GNSS Live Tracker · Esteban Porras</title>
+
+  <!-- satellite.js: SGP4 propagator — converts TLE + time → position in space -->
+  <script src="https://cdn.jsdelivr.net/npm/satellite.js/dist/satellite.min.js"></script>
+  <!-- topojson-client: compact world map format → GeoJSON polygons -->
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --navy:    #0b1f3a;
+      --bg:      #050f1e;
+      --accent:  #16b3c7;
+      --gps:     #3fd2c7;   /* cyan  — GPS satellites  */
+      --gal:     #a78bfa;   /* violet — Galileo satellites */
+      --gold:    #f2c14e;
+      --muted:   #5b6b7f;
+      --line:    rgba(255,255,255,0.07);
+      --card:    rgba(11,31,58,0.88);
+      --panel-w: 310px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: #cfe0f0;
+    }
+
+    /* ── TOP BAR ─────────────────────────────────────────────── */
+    .topbar {
+      height: 50px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(5,15,30,0.95);
+      border-bottom: 1px solid var(--line);
+      position: relative;
+      z-index: 20;
+    }
+
+    .topbar-brand {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    .topbar-brand .gps-dot  { color: var(--gps); }
+    .topbar-brand .gal-dot  { color: var(--gal); }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.75rem;
+      color: #6a8098;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 3px 10px;
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #3a5070;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    .status-dot.live {
+      background: var(--gps);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%,100% { opacity:1; }
+      50%      { opacity:0.4; }
+    }
+
+    /* Constellation filter buttons */
+    .const-btns {
+      display: flex;
+      gap: 4px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 3px;
+    }
+
+    .const-btn {
+      padding: 3px 10px;
+      border-radius: 5px;
+      border: none;
+      background: transparent;
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      color: #4a6070;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .const-btn.active-gps  { background: rgba(63,210,199,0.15); color: var(--gps); }
+    .const-btn.active-gal  { background: rgba(167,139,250,0.15); color: var(--gal); }
+    .const-btn.active-both { background: rgba(255,255,255,0.08); color: #c0d0e0; }
+
+    .topbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .utc-clock {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--gold);
+    }
+
+    .back-link {
+      font-size: 0.8rem;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 4px 10px;
+      border: 1px solid rgba(22,179,199,0.3);
+      border-radius: 6px;
+    }
+
+    .back-link:hover { background: rgba(22,179,199,0.1); }
+
+    /* ── MAIN LAYOUT ─────────────────────────────────────────── */
+    .main {
+      display: flex;
+      height: calc(100vh - 50px);
+    }
+
+    /* ── MAP AREA ────────────────────────────────────────────── */
+    .map-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #world-canvas {
+      flex: 1;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* ── TIME CONTROLS BAR (bottom of map) ───────────────────── */
+    /*
+      TIME SIMULATION
+      ───────────────
+      Real satellites take ~12 hours (GPS) or ~14 hours (Galileo)
+      to complete one orbit.  At real speed, you'd see nothing move.
+
+      We add a time offset to the propagation date, then accelerate
+      it each frame when "playing":
+
+        simTime = now + timeOffset
+        if (playing) timeOffset += playSpeed / fps
+
+      Speeds:
+        ×60    →  1 real second = 1 satellite minute   (nice for watching)
+        ×600   →  1 real second = 10 satellite minutes
+        ×3600  →  1 real second = 1 satellite hour
+        ×7200  →  full GPS orbit visible in ~6 seconds
+    */
+    .time-bar {
+      height: 42px;
+      background: rgba(5,15,30,0.92);
+      border-top: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      flex-shrink: 0;
+    }
+
+    .time-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: #9fb4cc;
+      font-size: 0.8rem;
+      font-family: 'Inter', sans-serif;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .time-btn:hover  { background: rgba(255,255,255,0.12); color: #fff; }
+    .time-btn.active { background: rgba(63,210,199,0.15); border-color: rgba(63,210,199,0.35); color: var(--gps); }
+
+    .time-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      color: #6a8098;
+      white-space: nowrap;
+    }
+
+    .time-label b { color: var(--gold); font-weight: 500; }
+
+    .speed-select {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      color: #9fb4cc;
+      font-size: 0.74rem;
+      font-family: 'Inter', sans-serif;
+      padding: 3px 7px;
+      cursor: pointer;
+    }
+
+    .speed-select:focus { outline: none; border-color: rgba(63,210,199,0.4); }
+
+    /* ── HUD OVERLAYS ────────────────────────────────────────── */
+    .hud {
+      position: absolute;
+      background: var(--card);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(63,210,199,0.15);
+      border-radius: 11px;
+      padding: 12px 15px;
+      font-size: 0.78rem;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .hud-tl { top: 14px; left: 14px; min-width: 195px; }
+    .hud-bl { bottom: 56px; left: 14px; }
+
+    .hud-title {
+      font-size: 0.67rem;
+      text-transform: uppercase;
+      letter-spacing: 1.8px;
+      color: var(--gps);
+      font-weight: 700;
+      margin-bottom: 9px;
+    }
+
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 2.5px 0;
+      color: #7e93ab;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .hud-row:first-of-type { border-top: none; }
+    .hud-row b { color: #fff; font-weight: 600; }
+    .hud-row b.good { color: var(--gps); }
+    .hud-row b.warn { color: var(--gold); }
+    .hud-row b.bad  { color: #e06c6c; }
+
+    .hud-hint {
+      margin-top: 8px;
+      padding-top: 7px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.7rem;
+      color: #3a5060;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 0.73rem;
+      color: #5a7080;
+      align-items: center;
+    }
+
+    .leg {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .leg-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── RIGHT PANEL ─────────────────────────────────────────── */
+    .right-panel {
+      width: var(--panel-w);
+      flex-shrink: 0;
+      background: rgba(4,12,24,0.75);
+      border-left: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-block {
+      padding: 12px 14px 8px;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+
+    .panel-label {
+      font-size: 0.67rem;
+      text-transform: uppercase;
+      letter-spacing: 1.8px;
+      color: var(--gps);
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    /* ── SKY PLOT ────────────────────────────────────────────── */
+    #sky-canvas { display: block; margin: 0 auto; }
+
+    /* ── TABS ────────────────────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 8px 0;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #4a6070;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+
+    .tab.active {
+      color: var(--gps);
+      border-bottom-color: var(--gps);
+    }
+
+    .tab-content { display: none; flex: 1; overflow-y: auto; }
+    .tab-content.active { display: flex; flex-direction: column; }
+
+    /* ── SATELLITE LIST ──────────────────────────────────────── */
+    .sat-list { flex: 1; overflow-y: auto; }
+
+    .sat-list::-webkit-scrollbar { width: 3px; }
+    .sat-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+    .sat-row {
+      display: grid;
+      grid-template-columns: 40px 1fr 50px;
+      gap: 8px;
+      padding: 5px 14px;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.025);
+    }
+
+    .sat-prn {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      font-weight: 500;
+    }
+
+    .sat-prn.gps-vis { color: var(--gps); }
+    .sat-prn.gal-vis { color: var(--gal); }
+    .sat-prn.hide    { color: #1e3550; }
+
+    .sat-bar-wrap { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+    .sat-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+    .sat-bar-fill.gps { background: linear-gradient(90deg, var(--accent), var(--gps)); }
+    .sat-bar-fill.gal { background: linear-gradient(90deg, #7c3aed, var(--gal)); }
+
+    .sat-elev {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: #3a5060;
+      text-align: right;
+    }
+
+    .sat-elev.vis { color: #8abcb0; }
+
+    /* ── PSEUDORANGE PANEL ───────────────────────────────────── */
+    /*
+      PSEUDORANGES — How GPS actually computes your position
+      ──────────────────────────────────────────────────────
+      Each GPS satellite continuously broadcasts two things:
+        1. Its precise position (from the orbital ephemeris)
+        2. A timestamp (from an atomic clock accurate to ~20 ns)
+
+      Your receiver measures the arrival time of that signal.
+      The difference (travel time × speed of light) gives distance:
+
+          ρᵢ = c · Δtᵢ
+
+      But this is a *pseudo*range, not a true range, because:
+        • Your receiver's cheap clock has an error δt_rcvr
+          (could be milliseconds off — at c = 299 792 km/s,
+           1 ms of clock error = 300 km of position error!)
+        • Ionospheric delay (signal slows in the ionosphere)
+        • Tropospheric delay
+        • Multipath (reflections off buildings)
+        • Satellite clock error (much smaller, ~20 ns)
+
+      Full model:
+          ρᵢ = rᵢ + c·δt_rcvr - c·δt_sat + I_i + T_i + ε_i
+
+      With ≥4 satellites, we solve a system of equations:
+          [x, y, z, δt_rcvr]  ← 4 unknowns
+
+      That's why you need exactly 4 satellites minimum:
+          3 for 3D position  +  1 to eliminate clock error
+    */
+    .pseudo-section {
+      padding: 12px 14px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .pseudo-section::-webkit-scrollbar { width: 3px; }
+    .pseudo-section::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+    .pseudo-explain {
+      background: rgba(11,31,58,0.6);
+      border: 1px solid rgba(63,210,199,0.12);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.74rem;
+      color: #7e93ab;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .pseudo-explain .formula {
+      font-family: 'JetBrains Mono', monospace;
+      color: #c0d8e8;
+      background: rgba(0,0,0,0.3);
+      border-radius: 5px;
+      padding: 5px 8px;
+      display: block;
+      margin: 6px 0;
+      font-size: 0.72rem;
+    }
+
+    .pseudo-explain b { color: #c0d0e0; }
+
+    /* Clock error slider */
+    .clock-control {
+      margin: 10px 0;
+    }
+
+    .clock-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: #6a8098;
+      margin-bottom: 5px;
+    }
+
+    .clock-label b { color: var(--gold); font-family: 'JetBrains Mono', monospace; }
+
+    #clock-slider {
+      width: 100%;
+      accent-color: var(--gold);
+      cursor: pointer;
+    }
+
+    .clock-error-impact {
+      font-size: 0.72rem;
+      color: #5a7080;
+      margin-top: 4px;
+    }
+
+    .clock-error-impact b { color: #e06c6c; }
+
+    /* Pseudorange table */
+    .pseudo-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.72rem;
+      margin-top: 8px;
+    }
+
+    .pseudo-table th {
+      text-align: left;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #3a5070;
+      font-weight: 600;
+      padding: 4px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .pseudo-table td {
+      padding: 4px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-family: 'JetBrains Mono', monospace;
+      color: #6a8098;
+    }
+
+    .pseudo-table td:first-child { font-weight: 600; }
+    .pseudo-table td.rng  { color: #9fb4cc; }
+    .pseudo-table td.prng { color: var(--gold); }
+
+    .solve-box {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(63,210,199,0.06);
+      border: 1px solid rgba(63,210,199,0.15);
+      border-radius: 8px;
+      font-size: 0.72rem;
+      color: #7e93ab;
+    }
+
+    .solve-box .solve-title {
+      color: var(--gps);
+      font-weight: 700;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 7px;
+    }
+
+    .solve-box .solve-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+
+    .solve-box b { color: #c0d8e8; font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+
+    @media (max-width: 768px) {
+      .main { flex-direction: column; }
+      .right-panel { width: 100%; height: 280px; border-left: none; border-top: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ TOP BAR ════════════════════════════════════════════════════ -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <span class="gps-dot">●</span> GPS
+    <span style="color:#3a5070"> · </span>
+    <span class="gal-dot">●</span> Galileo
+    <span style="color:#3a5070;font-weight:400"> · Live Tracker</span>
+  </div>
+
+  <div class="status-pill">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-msg">Connecting…</span>
+  </div>
+
+  <!-- CONSTELLATION FILTER
+       GPS and Galileo orbit at different altitudes and inclinations,
+       so their ground tracks look different. Try switching to see. -->
+  <div class="const-btns">
+    <button class="const-btn active-both" id="btn-both" onclick="setConst('both')">Both</button>
+    <button class="const-btn" id="btn-gps"  onclick="setConst('gps')">GPS</button>
+    <button class="const-btn" id="btn-gal"  onclick="setConst('galileo')">Galileo</button>
+  </div>
+
+  <div class="topbar-right">
+    <span class="utc-clock" id="utc-clock">—</span>
+    <a href="index.html" class="back-link">← Portfolio</a>
+  </div>
+</div>
+
+<!-- ═══ MAIN ════════════════════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- MAP AREA -->
+  <div class="map-area">
+    <canvas id="world-canvas"></canvas>
+
+    <!-- Stats HUD -->
+    <div class="hud hud-tl">
+      <div class="hud-title">GNSS Constellation</div>
+      <div class="hud-row">
+        <span>GPS tracked</span>
+        <b id="hud-gps-total">—</b>
+      </div>
+      <div class="hud-row">
+        <span>Galileo tracked</span>
+        <b id="hud-gal-total" style="color:var(--gal)">—</b>
+      </div>
+      <div class="hud-row">
+        <span>Above horizon (&gt;5°)</span>
+        <b id="hud-visible" class="good">—</b>
+      </div>
+      <div class="hud-row">
+        <span>PDOP</span>
+        <b id="hud-pdop" class="warn">—</b>
+      </div>
+      <div class="hud-hint" id="hud-loc">📍 Click the map to set your location</div>
+    </div>
+
+    <!-- Legend -->
+    <div class="hud hud-bl">
+      <div class="legend">
+        <div class="leg">
+          <span class="leg-dot" style="background:var(--gps);box-shadow:0 0 5px var(--gps)"></span>GPS visible
+        </div>
+        <div class="leg">
+          <span class="leg-dot" style="background:var(--gal);box-shadow:0 0 5px var(--gal)"></span>Galileo visible
+        </div>
+        <div class="leg">
+          <span class="leg-dot" style="background:#1e3a58;border:1px solid #2d5070"></span>Below horizon
+        </div>
+        <div class="leg">
+          <span class="leg-dot" style="background:var(--gold)"></span>Your location
+        </div>
+      </div>
+    </div>
+
+    <!-- TIME CONTROLS BAR
+         Satellites orbit at ~3.87 km/s (GPS) and ~3.67 km/s (Galileo).
+         Simulating time lets you see the full orbital geometry evolve.
+         At ×3600: a full GPS orbit (11h 58min) takes ~12 real seconds. -->
+    <div class="time-bar">
+      <button class="time-btn" onclick="resetTime()" title="Back to now">⏮ Now</button>
+      <button class="time-btn" onclick="stepTime(-3600)">−1h</button>
+      <button class="time-btn" id="play-btn" onclick="togglePlay()">▶ Play</button>
+      <button class="time-btn" onclick="stepTime(3600)">+1h</button>
+
+      <select class="speed-select" id="speed-sel" onchange="setSpeed(this.value)">
+        <option value="60">×60</option>
+        <option value="300">×300</option>
+        <option value="600" selected>×600</option>
+        <option value="3600">×3600</option>
+        <option value="7200">×7200</option>
+      </select>
+
+      <span class="time-label" style="margin-left:4px">
+        Offset: <b id="time-offset-label">+0h 00m</b>
+      </span>
+      <span class="time-label" style="margin-left:auto">
+        Sim time: <b id="sim-time-label">—</b>
+      </span>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <!-- Sky plot block -->
+    <div class="panel-block">
+      <div class="panel-label">Sky Plot — Your View</div>
+      <canvas id="sky-canvas" width="282" height="220"></canvas>
+    </div>
+
+    <!-- Tabs: Satellites | Pseudoranges -->
+    <div class="tab-bar">
+      <div class="tab active" id="tab-sats" onclick="switchTab('sats')">Satellites</div>
+      <div class="tab" id="tab-pseudo" onclick="switchTab('pseudo')">Pseudoranges</div>
+    </div>
+
+    <!-- Tab: Satellites -->
+    <div class="tab-content active" id="tc-sats">
+      <div class="sat-list" id="sat-list"></div>
+    </div>
+
+    <!-- Tab: Pseudoranges -->
+    <div class="tab-content" id="tc-pseudo">
+      <div class="pseudo-section">
+
+        <div class="pseudo-explain">
+          <b>How GPS finds you:</b> Each satellite sends its position + a timestamp.
+          Your receiver measures signal arrival time, computes distance.
+          <span class="formula">ρᵢ = rᵢ + c·δtᵣ − c·δtₛ + Iᵢ + Tᵢ</span>
+          <b>ρᵢ</b> = pseudorange &nbsp;|&nbsp; <b>rᵢ</b> = true range &nbsp;|&nbsp;
+          <b>c·δtᵣ</b> = receiver clock error × speed of light<br>
+          Need <b>≥ 4 satellites</b> to solve for x, y, z + clock error.
+        </div>
+
+        <!-- Simulate receiver clock error -->
+        <div class="clock-control">
+          <div class="clock-label">
+            <span>Receiver clock error (δtᵣ)</span>
+            <b id="clock-val">0.00 ms</b>
+          </div>
+          <input type="range" id="clock-slider" min="0" max="3" step="0.01" value="0">
+          <div class="clock-error-impact">
+            Position error from clock: <b id="clock-impact">0 km</b>
+            <br>
+            <span style="font-size:0.68rem;color:#3a5060">
+              (c = 299 792 km/s · 1 ms = 300 km of error!)
+            </span>
+          </div>
+        </div>
+
+        <table class="pseudo-table" id="pseudo-table">
+          <thead>
+            <tr>
+              <th>PRN</th>
+              <th>True range</th>
+              <th>Pseudorange</th>
+              <th>El°</th>
+            </tr>
+          </thead>
+          <tbody id="pseudo-tbody">
+            <tr><td colspan="4" style="color:#2a4050;padding:12px 6px">Waiting for data…</td></tr>
+          </tbody>
+        </table>
+
+        <div class="solve-box" id="solve-box" style="display:none">
+          <div class="solve-title">Least-squares solution</div>
+          <div class="solve-row"><span>Visible satellites</span><b id="sv-count">—</b></div>
+          <div class="solve-row"><span>PDOP</span><b id="pdop-solve">—</b></div>
+          <div class="solve-row"><span>Clock error (simulated)</span><b id="clock-bias">—</b></div>
+          <div class="solve-row"><span>Position uncertainty</span><b id="pos-unc">—</b></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- right-panel -->
+</div><!-- main -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     GNSS LIVE TRACKER  —  JavaScript
+     ═══════════════════════════════════════════════════════════════
+
+  GLOSSARY (concepts appear in the order you encounter them below)
+  ─────────────────────────────────────────────────────────────────
+  GNSS       Global Navigation Satellite System — umbrella term.
+
+  GPS        31 satellites, ~20 200 km MEO, inclination 55°,
+             period ~11h 58min, 6 orbital planes, 4 slots each.
+
+  Galileo    30 satellites, ~23 222 km MEO, inclination 56°,
+             period ~14h 05min, 3 orbital planes, 10 slots each.
+             Frequencies: E1, E5a/b, E6.  Higher altitude = weaker
+             signal but better coverage at high latitudes.
+
+  TLE        Two-Line Element set — 69-char text format for orbits.
+
+  SGP4       Algorithm: TLE + time → position (ECI, km).
+
+  ECI        Earth-Centered Inertial — doesn't rotate with Earth.
+  ECF        Earth-Centered Fixed — rotates with Earth.
+  GMST       Greenwich Mean Sidereal Time — Earth's rotation angle.
+
+  Pseudorange  ρᵢ = rᵢ + c·δt_receiver − c·δt_satellite + I + T + ε
+  PDOP       Position Dilution of Precision — geometry quality metric.
+  ─────────────────────────────────────────────────────────────────
+-->
+<script>
+(function () {
+  'use strict';
+
+  /* ── CANVAS SETUP ─────────────────────────────────────────── */
+  const wCanvas = document.getElementById('world-canvas');
+  const sCanvas = document.getElementById('sky-canvas');
+  const wCtx    = wCanvas.getContext('2d');
+  const sCtx    = sCanvas.getContext('2d');
+
+  function resizeWorld() {
+    const el = wCanvas.parentElement;
+    wCanvas.width  = Math.round(el.clientWidth  * devicePixelRatio);
+    wCanvas.height = Math.round(el.clientHeight * devicePixelRatio);
+    wCanvas.style.width  = el.clientWidth  + 'px';
+    wCanvas.style.height = el.clientHeight + 'px';
+  }
+  resizeWorld();
+  window.addEventListener('resize', resizeWorld);
+
+  /* ── STATE ────────────────────────────────────────────────── */
+  let gpsSats   = [];   // [{satrec, name, prn, constellation:'GPS'}]
+  let galSats   = [];   // [{satrec, name, prn, constellation:'Galileo'}]
+  let worldPolys = [];
+  let obsLat     = 49.44;  // Grünstadt, Germany
+  let obsLon     = 7.96;
+  let obsSet     = false;
+  let filter     = 'both';   // 'gps' | 'galileo' | 'both'
+  let lastSatData = [];
+
+  /* Time simulation state */
+  let timeOffsetSec = 0;   // seconds added to real time
+  let playing       = false;
+  let playSpeed     = 600; // seconds of sim-time per real second
+
+  /* Pseudorange state */
+  let clockErrorMs = 0;    // receiver clock error in milliseconds
+  document.getElementById('clock-slider').addEventListener('input', e => {
+    clockErrorMs = parseFloat(e.target.value);
+    document.getElementById('clock-val').textContent    = clockErrorMs.toFixed(2) + ' ms';
+    /* 1 ms of clock error = 299.792 km of range error */
+    const km = (clockErrorMs * 299.792).toFixed(0);
+    document.getElementById('clock-impact').textContent = km + ' km';
+  });
+
+  /* ── EQUIRECTANGULAR PROJECTION ───────────────────────────── */
+  function project(lon, lat) {
+    const W = wCanvas.width, H = wCanvas.height;
+    return [(lon + 180) / 360 * W, (90 - lat) / 180 * H];
+  }
+
+  /* ── DRAW WORLD MAP ───────────────────────────────────────── */
+  function drawWorld() {
+    const W = wCanvas.width, H = wCanvas.height, d = devicePixelRatio;
+
+    wCtx.fillStyle = '#040c18';
+    wCtx.fillRect(0, 0, W, H);
+
+    /* Graticule */
+    for (let lo = -180; lo <= 180; lo += 30) {
+      wCtx.strokeStyle = lo === 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.04)';
+      wCtx.lineWidth   = lo === 0 ? d : 0.5 * d;
+      const [x] = project(lo, 0);
+      wCtx.beginPath(); wCtx.moveTo(x, 0); wCtx.lineTo(x, H); wCtx.stroke();
+    }
+    for (let la = -90; la <= 90; la += 30) {
+      wCtx.strokeStyle = la === 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)';
+      wCtx.lineWidth   = la === 0 ? d : 0.5 * d;
+      const [, y] = project(0, la);
+      wCtx.beginPath(); wCtx.moveTo(0, y); wCtx.lineTo(W, y); wCtx.stroke();
+    }
+
+    /* Tropic of Cancer / Capricorn */
+    [23.44, -23.44].forEach(la => {
+      const [, y] = project(0, la);
+      wCtx.strokeStyle = 'rgba(242,193,78,0.07)';
+      wCtx.lineWidth   = 0.5 * d;
+      wCtx.setLineDash([4 * d, 6 * d]);
+      wCtx.beginPath(); wCtx.moveTo(0, y); wCtx.lineTo(W, y); wCtx.stroke();
+      wCtx.setLineDash([]);
+    });
+
+    /* Countries */
+    if (worldPolys.length) {
+      wCtx.fillStyle   = 'rgba(18,46,84,0.72)';
+      wCtx.strokeStyle = 'rgba(70,130,200,0.25)';
+      wCtx.lineWidth   = 0.5 * d;
+      worldPolys.forEach(rings => {
+        rings.forEach(ring => {
+          wCtx.beginPath();
+          ring.forEach(([lo, la], i) => {
+            const [x, y] = project(lo, la);
+            i === 0 ? wCtx.moveTo(x, y) : wCtx.lineTo(x, y);
+          });
+          wCtx.closePath(); wCtx.fill(); wCtx.stroke();
+        });
+      });
+    }
+  }
+
+  /* ── SATELLITE PROPAGATION ────────────────────────────────── */
+  /*
+    SGP4 takes:
+      satrec  — parsed TLE (the orbital elements)
+      date    — JavaScript Date object (the "when")
+    Returns:
+      position {x,y,z} in km, in ECI frame
+      velocity {x,y,z} in km/s
+
+    Then:
+      gmst   = Greenwich Mean Sidereal Time (Earth's rotation angle)
+      ecf    = ECI rotated by gmst → Earth-fixed frame
+      geo    = geodetic (lat, lon, alt) from ECI via ellipsoid math
+  */
+  function propagate(satrec, date) {
+    const pv = satellite.propagate(satrec, date);
+    if (!pv || !pv.position || isNaN(pv.position.x)) return null;
+    const gmst = satellite.gstime(date);
+    const ecf  = satellite.eciToEcf(pv.position, gmst);
+    const geo  = satellite.eciToGeodetic(pv.position, gmst);
+    return {
+      lat: satellite.degreesLat(geo.latitude),
+      lon: satellite.degreesLong(geo.longitude),
+      alt: geo.height,  /* km */
+      ecf
+    };
+  }
+
+  /* ── ELEVATION / AZIMUTH / RANGE ──────────────────────────── */
+  /*
+    Given observer geodetic position (lat, lon, height=0) and satellite
+    ECF vector, satellite.js computes:
+      elevation  — angle above horizon (deg)
+      azimuth    — compass bearing (deg, 0=N)
+      rangeSat   — slant range (km)
+  */
+  function lookAngles(ecf, lat, lon) {
+    const obs = {
+      latitude:  satellite.degreesToRadians(lat),
+      longitude: satellite.degreesToRadians(lon),
+      height: 0.0
+    };
+    const look = satellite.ecfToLookAngles(obs, ecf);
+    return {
+      elevation: satellite.radiansToDegrees(look.elevation),
+      azimuth:   satellite.radiansToDegrees(look.azimuth),
+      range:     look.rangeSat
+    };
+  }
+
+  /* ── DRAW SATELLITES ──────────────────────────────────────── */
+  function drawSats(date) {
+    const d = devicePixelRatio;
+    const allSats = [
+      ...((filter !== 'galileo') ? gpsSats : []),
+      ...((filter !== 'gps')     ? galSats : [])
+    ];
+    const data = [];
+
+    allSats.forEach(sat => {
+      const pos = propagate(sat.satrec, date);
+      if (!pos) return;
+      const look = lookAngles(pos.ecf, obsLat, obsLon);
+      const vis  = look.elevation > 5;
+      const [x, y] = project(pos.lon, pos.lat);
+      const isGPS = sat.constellation === 'GPS';
+      const color = isGPS ? '#3fd2c7' : '#a78bfa';
+
+      if (vis) {
+        const g = wCtx.createRadialGradient(x, y, 0, x, y, 13 * d);
+        g.addColorStop(0, color.replace(')', ',0.8)').replace('rgb', 'rgba').replace('#3fd2c7','rgba(63,210,199').replace('#a78bfa','rgba(167,139,250'));
+        g.addColorStop(1, 'transparent');
+        const g2 = wCtx.createRadialGradient(x, y, 0, x, y, 13 * d);
+        if (isGPS) {
+          g2.addColorStop(0, 'rgba(63,210,199,0.75)');
+        } else {
+          g2.addColorStop(0, 'rgba(167,139,250,0.75)');
+        }
+        g2.addColorStop(1, 'rgba(0,0,0,0)');
+        wCtx.beginPath(); wCtx.arc(x, y, 13 * d, 0, Math.PI * 2);
+        wCtx.fillStyle = g2; wCtx.fill();
+
+        wCtx.beginPath(); wCtx.arc(x, y, 4.5 * d, 0, Math.PI * 2);
+        wCtx.fillStyle = color; wCtx.fill();
+
+        wCtx.fillStyle = isGPS ? '#7fd6e6' : '#c4b5fd';
+        wCtx.font = `${9 * d}px JetBrains Mono, monospace`;
+        wCtx.fillText(sat.prn, x + 7 * d, y + 4 * d);
+      } else {
+        wCtx.beginPath(); wCtx.arc(x, y, 2.8 * d, 0, Math.PI * 2);
+        wCtx.fillStyle   = '#182a40';
+        wCtx.strokeStyle = '#243a55';
+        wCtx.lineWidth   = 0.7 * d;
+        wCtx.fill(); wCtx.stroke();
+      }
+
+      data.push({ ...sat, ...pos, ...look, visible: vis });
+    });
+
+    /* Observer marker */
+    const [ox, oy] = project(obsLon, obsLat);
+    wCtx.strokeStyle = 'rgba(242,193,78,0.4)';
+    wCtx.lineWidth   = d;
+    const cr = 13 * d;
+    wCtx.beginPath();
+    wCtx.moveTo(ox - cr, oy); wCtx.lineTo(ox + cr, oy);
+    wCtx.moveTo(ox, oy - cr); wCtx.lineTo(ox, oy + cr);
+    wCtx.stroke();
+    wCtx.beginPath(); wCtx.arc(ox, oy, 5 * d, 0, Math.PI * 2);
+    wCtx.fillStyle = '#f2c14e'; wCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+    wCtx.lineWidth = 1.5 * d; wCtx.fill(); wCtx.stroke();
+
+    return data;
+  }
+
+  /* ── SKY PLOT ─────────────────────────────────────────────── */
+  /*
+    Polar view from your location looking straight up.
+    Center = zenith (90° elevation).
+    Edge   = horizon (0° elevation).
+    North at top; satellites move clockwise as Earth rotates.
+
+    When you animate time, watch how the satellite distribution
+    changes — this directly affects PDOP and position accuracy.
+  */
+  function drawSky(data) {
+    const W = sCanvas.width, H = sCanvas.height;
+    const cx = W / 2, cy = H / 2;
+    const R  = Math.min(W, H) * 0.43;
+
+    sCtx.clearRect(0, 0, W, H);
+    sCtx.fillStyle = '#030810';
+    sCtx.beginPath(); sCtx.arc(cx, cy, R + 6, 0, Math.PI * 2);
+    sCtx.fill();
+
+    /* Elevation rings */
+    [30, 60].forEach(el => {
+      const r = R * (1 - el / 90);
+      sCtx.beginPath(); sCtx.arc(cx, cy, r, 0, Math.PI * 2);
+      sCtx.strokeStyle = 'rgba(255,255,255,0.07)'; sCtx.lineWidth = 0.7;
+      sCtx.stroke();
+      sCtx.fillStyle = 'rgba(80,120,160,0.5)';
+      sCtx.font = '9px Inter,sans-serif';
+      sCtx.fillText(el + '°', cx + r + 2, cy + 4);
+    });
+
+    /* Horizon */
+    sCtx.beginPath(); sCtx.arc(cx, cy, R, 0, Math.PI * 2);
+    sCtx.strokeStyle = 'rgba(255,255,255,0.2)'; sCtx.lineWidth = 1.2; sCtx.stroke();
+
+    /* 5° mask */
+    const maskR = R * (85 / 90);
+    sCtx.beginPath(); sCtx.arc(cx, cy, maskR, 0, Math.PI * 2);
+    sCtx.strokeStyle = 'rgba(242,193,78,0.25)'; sCtx.lineWidth = 0.8;
+    sCtx.setLineDash([4, 4]); sCtx.stroke(); sCtx.setLineDash([]);
+
+    /* Spokes */
+    sCtx.strokeStyle = 'rgba(255,255,255,0.05)'; sCtx.lineWidth = 0.6;
+    [0,45,90,135].forEach(az => {
+      const a = (az-90)*Math.PI/180;
+      sCtx.beginPath();
+      sCtx.moveTo(cx + R*Math.cos(a), cy + R*Math.sin(a));
+      sCtx.lineTo(cx - R*Math.cos(a), cy - R*Math.sin(a));
+      sCtx.stroke();
+    });
+
+    /* Cardinals */
+    sCtx.fillStyle = 'rgba(140,180,215,0.6)';
+    sCtx.font = 'bold 9px Inter,sans-serif';
+    sCtx.textAlign = 'center';
+    sCtx.fillText('N', cx, cy-R-7);
+    sCtx.fillText('S', cx, cy+R+15);
+    sCtx.fillText('E', cx+R+13, cy+4);
+    sCtx.fillText('W', cx-R-13, cy+4);
+    sCtx.textAlign = 'left';
+
+    /* Satellites */
+    data.forEach(sat => {
+      if (sat.elevation < -15) return;
+      const el  = Math.max(sat.elevation, 0);
+      const r   = R * (1 - el / 90);
+      const azR = (sat.azimuth - 90) * Math.PI / 180;
+      const sx  = cx + r * Math.cos(azR);
+      const sy  = cy + r * Math.sin(azR);
+      const isGPS = sat.constellation === 'GPS';
+
+      if (sat.visible) {
+        const gc = sCtx.createRadialGradient(sx,sy,0,sx,sy,11);
+        gc.addColorStop(0, isGPS ? 'rgba(63,210,199,0.8)'  : 'rgba(167,139,250,0.8)');
+        gc.addColorStop(1, 'rgba(0,0,0,0)');
+        sCtx.beginPath(); sCtx.arc(sx, sy, 11, 0, Math.PI*2);
+        sCtx.fillStyle = gc; sCtx.fill();
+        sCtx.beginPath(); sCtx.arc(sx, sy, 4.5, 0, Math.PI*2);
+        sCtx.fillStyle = isGPS ? '#3fd2c7' : '#a78bfa'; sCtx.fill();
+        sCtx.fillStyle = isGPS ? '#7fd6e6' : '#c4b5fd';
+        sCtx.font = 'bold 7px JetBrains Mono,monospace';
+        sCtx.fillText(sat.prn, sx+6, sy+3);
+      } else {
+        sCtx.beginPath(); sCtx.arc(sx, sy, 2.5, 0, Math.PI*2);
+        sCtx.fillStyle='#182a40'; sCtx.strokeStyle='#243a55'; sCtx.lineWidth=0.7;
+        sCtx.fill(); sCtx.stroke();
+      }
+    });
+  }
+
+  /* ── PDOP COMPUTATION ─────────────────────────────────────── */
+  /*
+    PDOP (Position Dilution of Precision) is computed from the
+    Design Matrix H, where each row is the unit vector from receiver
+    to satellite in ENU (East-North-Up) coordinates:
+
+        hᵢ = [cos(el)·sin(az),  cos(el)·cos(az),  sin(el),  1]
+               East              North              Up        clock
+
+    PDOP = sqrt( trace of (HᵀH)⁻¹ for the position rows )
+
+    This is what a real GNSS receiver computes continuously.
+    Low PDOP (< 2) → good geometry → accurate position.
+  */
+  function computePDOP(visSats) {
+    if (visSats.length < 4) return null;
+    const H = visSats.map(s => {
+      const el = satellite.degreesToRadians(s.elevation);
+      const az = satellite.degreesToRadians(s.azimuth);
+      return [Math.cos(el)*Math.sin(az), Math.cos(el)*Math.cos(az), Math.sin(el), 1];
+    });
+    const HtH = Array.from({length:4}, () => new Array(4).fill(0));
+    H.forEach(row => {
+      for (let i=0; i<4; i++) for (let j=0; j<4; j++) HtH[i][j] += row[i]*row[j];
+    });
+    const inv = inv4(HtH);
+    if (!inv) return null;
+    const v = Math.sqrt(inv[0][0] + inv[1][1] + inv[2][2]);
+    return isFinite(v) ? v : null;
+  }
+
+  /* 4×4 matrix inversion via Gauss-Jordan with partial pivoting */
+  function inv4(A) {
+    const n = 4;
+    const M = [];
+    for (let i=0; i<n; i++) M.push([...A[i], ...(new Array(n).fill(0).map((_,j)=>i===j?1:0))]);
+    for (let col=0; col<n; col++) {
+      let mr = col;
+      for (let r=col+1; r<n; r++) if (Math.abs(M[r][col]) > Math.abs(M[mr][col])) mr=r;
+      [M[col], M[mr]] = [M[mr], M[col]];
+      const p = M[col][col];
+      if (Math.abs(p) < 1e-12) return null;
+      for (let j=0; j<2*n; j++) M[col][j] /= p;
+      for (let r=0; r<n; r++) {
+        if (r===col) continue;
+        const f = M[r][col];
+        for (let j=0; j<2*n; j++) M[r][j] -= f*M[col][j];
+      }
+    }
+    return M.map(r => r.slice(n));
+  }
+
+  /* ── UPDATE ALL UI ────────────────────────────────────────── */
+  function updateUI(data, simDate) {
+    const visSats = data.filter(s => s.visible);
+    const visGPS  = data.filter(s => s.visible && s.constellation==='GPS');
+    const visGAL  = data.filter(s => s.visible && s.constellation==='Galileo');
+    const allGPS  = data.filter(s => s.constellation==='GPS');
+    const allGAL  = data.filter(s => s.constellation==='Galileo');
+
+    document.getElementById('hud-gps-total').textContent = allGPS.length;
+    document.getElementById('hud-gal-total').textContent = allGAL.length;
+    document.getElementById('hud-visible').textContent   = visSats.length;
+
+    const pdop    = computePDOP(visSats);
+    const pdopEl  = document.getElementById('hud-pdop');
+    if (pdop !== null) {
+      pdopEl.textContent = pdop.toFixed(2);
+      pdopEl.className   = pdop < 2 ? 'good' : pdop < 5 ? 'warn' : 'bad';
+    } else {
+      pdopEl.textContent = visSats.length < 4 ? '< 4 sats' : '—';
+      pdopEl.className   = 'bad';
+    }
+
+    /* Observer label */
+    document.getElementById('hud-loc').textContent = obsSet
+      ? `📍 ${Math.abs(obsLat).toFixed(2)}° ${obsLat>=0?'N':'S'}, ${Math.abs(obsLon).toFixed(2)}° ${obsLon>=0?'E':'W'}`
+      : '📍 Grünstadt, DE — click map to change';
+
+    /* Clocks */
+    document.getElementById('utc-clock').textContent =
+      simDate.toISOString().replace('T',' ').slice(0,19) + ' UTC';
+
+    const off = timeOffsetSec;
+    const sign = off<0?'-':'+';
+    const h = Math.floor(Math.abs(off)/3600);
+    const m = Math.floor((Math.abs(off)%3600)/60);
+    document.getElementById('time-offset-label').textContent =
+      `${sign}${h}h ${String(m).padStart(2,'0')}m`;
+    document.getElementById('sim-time-label').textContent =
+      simDate.toISOString().slice(0,16).replace('T',' ') + ' UTC';
+
+    /* Satellite list */
+    const sorted = [...data].sort((a,b) => b.elevation - a.elevation);
+    document.getElementById('sat-list').innerHTML = sorted.map(s => {
+      const vis  = s.visible;
+      const cls  = vis ? (s.constellation==='GPS' ? 'gps-vis' : 'gal-vis') : 'hide';
+      const barC = s.constellation==='GPS' ? 'gps' : 'gal';
+      const pct  = Math.max(0, (s.elevation/90)*100).toFixed(1);
+      const eTxt = s.elevation > -5
+        ? `${s.elevation>0?'+':''}${s.elevation.toFixed(0)}°`
+        : '—';
+      return `<div class="sat-row">
+        <span class="sat-prn ${cls}">${s.prn}</span>
+        <div class="sat-bar-wrap"><div class="sat-bar-fill ${barC}" style="width:${pct}%"></div></div>
+        <span class="sat-elev ${vis?'vis':''}">${eTxt}</span>
+      </div>`;
+    }).join('');
+
+    /* Pseudorange tab */
+    updatePseudo(visSats, pdop);
+  }
+
+  /* ── PSEUDORANGE TABLE ────────────────────────────────────── */
+  /*
+    PSEUDORANGE MODEL:
+        ρᵢ = rᵢ + c · δt_receiver
+
+    Here we simulate this. The "true range" rᵢ is the actual
+    satellite-to-observer distance from SGP4. The pseudorange
+    adds the simulated receiver clock error:
+
+        c = 299 792.458 km/s
+        δt_receiver = clockErrorMs / 1000   (seconds)
+        bias = c × δt_receiver              (km)
+
+    So every satellite's pseudorange is offset by the same bias.
+    This is why a single additional satellite (4th) lets the receiver
+    solve for clock error — all pseudoranges share the same bias!
+  */
+  const C = 299792.458; // speed of light in km/s
+
+  function updatePseudo(visSats, pdop) {
+    const bias = clockErrorMs / 1000 * C;  // km
+
+    const tbody = document.getElementById('pseudo-tbody');
+    if (visSats.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:#2a4050;padding:10px 6px">No visible satellites</td></tr>';
+      document.getElementById('solve-box').style.display = 'none';
+      return;
+    }
+
+    tbody.innerHTML = visSats
+      .sort((a,b) => b.elevation - a.elevation)
+      .map(s => {
+        const trueRange  = s.range.toFixed(0);
+        const pseudoRange = (s.range + bias).toFixed(0);
+        return `<tr>
+          <td class="sat-prn ${s.constellation==='GPS'?'gps-vis':'gal-vis'}">${s.prn}</td>
+          <td class="rng">${trueRange} km</td>
+          <td class="prng">${pseudoRange} km</td>
+          <td>${s.elevation.toFixed(1)}°</td>
+        </tr>`;
+      }).join('');
+
+    /* Solution box */
+    const box = document.getElementById('solve-box');
+    box.style.display = 'block';
+    document.getElementById('sv-count').textContent = visSats.length;
+    document.getElementById('pdop-solve').textContent = pdop ? pdop.toFixed(2) : '—';
+    document.getElementById('clock-bias').textContent = clockErrorMs.toFixed(2) + ' ms';
+    const unc = pdop ? (pdop * 3 * (1 + clockErrorMs * 10)).toFixed(1) : '—';
+    document.getElementById('pos-unc').textContent = unc + ' m (≈)';
+  }
+
+  /* ── TIME CONTROLS ────────────────────────────────────────── */
+  let lastTs = null;
+
+  function togglePlay() {
+    playing = !playing;
+    const btn = document.getElementById('play-btn');
+    btn.textContent = playing ? '⏸ Pause' : '▶ Play';
+    btn.className   = 'time-btn' + (playing ? ' active' : '');
+    if (playing) lastTs = null;
+  }
+
+  function resetTime() {
+    timeOffsetSec = 0;
+    playing       = false;
+    document.getElementById('play-btn').textContent = '▶ Play';
+    document.getElementById('play-btn').className   = 'time-btn';
+  }
+
+  function stepTime(seconds) {
+    timeOffsetSec += seconds;
+  }
+
+  function setSpeed(v) {
+    playSpeed = parseInt(v, 10);
+  }
+
+  window.togglePlay = togglePlay;
+  window.resetTime  = resetTime;
+  window.stepTime   = stepTime;
+  window.setSpeed   = setSpeed;
+
+  /* ── CONSTELLATION FILTER ─────────────────────────────────── */
+  window.setConst = function(c) {
+    filter = c;
+    ['both','gps','gal'].forEach(id => {
+      const el = document.getElementById('btn-' + id);
+      el.className = 'const-btn';
+      if ((id==='both' && c==='both') || (id==='gps' && c==='gps') || (id==='gal' && c==='galileo'))
+        el.className += ' active-' + id;
+    });
+  };
+
+  /* ── TAB SWITCHER ─────────────────────────────────────────── */
+  window.switchTab = function(name) {
+    ['sats','pseudo'].forEach(t => {
+      document.getElementById('tc-'+t).classList.toggle('active', t===name);
+      document.getElementById('tab-'+t).classList.toggle('active', t===name);
+    });
+  };
+  // fix tab id mismatch
+  document.getElementById('tab-pseudo').id = 'tab-pseudo';
+
+  /* ── CLICK → SET LOCATION ─────────────────────────────────── */
+  wCanvas.addEventListener('click', e => {
+    const r  = wCanvas.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width  * wCanvas.width;
+    const py = (e.clientY - r.top)  / r.height * wCanvas.height;
+    obsLon = px / wCanvas.width  * 360 - 180;
+    obsLat = 90 - py / wCanvas.height * 180;
+    obsSet = true;
+  });
+
+  /* ── MAIN LOOP ─────────────────────────────────────────────── */
+  function animate(ts) {
+    /* Advance simulated time */
+    if (playing && lastTs !== null) {
+      const elapsed = (ts - lastTs) / 1000;          // real seconds
+      timeOffsetSec += elapsed * playSpeed;           // sim seconds
+    }
+    lastTs = ts;
+
+    const simDate = new Date(Date.now() + timeOffsetSec * 1000);
+
+    drawWorld();
+    const satData = drawSats(simDate);
+    lastSatData   = satData;
+    drawSky(satData);
+    updateUI(satData, simDate);
+
+    requestAnimationFrame(animate);
+  }
+
+  /* ── PARSE TLE ────────────────────────────────────────────── */
+  /*
+    TLE THREE-LINE FORMAT:
+      Line 0: Name (e.g. "GALILEO 5 (GSAT0205)")
+      Line 1: 1 NNNNNU YYMMM.DDDDDDDD +.NNNNNNNN  drag  ...
+      Line 2: 2 NNNNN  inc   RAAN   ecc   argPeri  M    n  rev
+
+    Key fields in Line 2:
+      inc    — inclination (deg):  GPS ≈ 55°, Galileo ≈ 56°
+      RAAN   — Right Ascension of Ascending Node (orbital plane angle)
+      ecc    — eccentricity: GPS ≈ 0.01 (nearly circular)
+      M      — Mean Anomaly: where on orbit at epoch
+      n      — Mean Motion (rev/day):  GPS ≈ 2.0,  Galileo ≈ 1.7
+  */
+  function parseTLE(text, constellation) {
+    const lines  = text.trim().split('\n').map(l=>l.trim()).filter(Boolean);
+    const result = [];
+    for (let i=0; i+2 < lines.length; i+=3) {
+      const name = lines[i].replace(/^0\s+/,'').trim();
+      const l1   = lines[i+1], l2 = lines[i+2];
+      if (!l1.startsWith('1 ') || !l2.startsWith('2 ')) continue;
+      try {
+        const satrec = satellite.twoline2satrec(l1, l2);
+        const num    = parseInt(l2.substring(2,7).trim(), 10);
+        /* PRN naming convention:
+           GPS → G01..G32
+           Galileo → E01..E36  */
+        const prefix = constellation === 'GPS' ? 'G' : 'E';
+        const prn    = prefix + String(num % 100).padStart(2,'0');
+        result.push({ satrec, name, prn, constellation });
+      } catch(_) {}
+    }
+    return result;
+  }
+
+  /* ── FETCH TLE DATA ───────────────────────────────────────── */
+  /*
+    GALILEO ORBIT (compared to GPS):
+    ───────────────────────────────
+    Altitude:    ~23 222 km vs GPS ~20 200 km
+    Period:      ~14h 05min vs GPS ~11h 58min
+    Inclination: 56° vs GPS 55°
+    Planes:      3 orbital planes × 10 satellites (vs GPS 6 × ~5)
+    Frequencies: E1 (1575.42 MHz, same as GPS L1!), E5, E6
+                 The shared E1/L1 frequency enables interoperability.
+
+    Because Galileo is higher, its signals are slightly weaker but
+    cover higher latitudes better (important for northern Europe!).
+  */
+  async function loadConstellation(constellation) {
+    const url = `https://celestrak.org/GNSS/table.php?constellation=${constellation}&format=TLE`;
+    try {
+      const text = await fetch(url).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      });
+      const parsed = parseTLE(text, constellation);
+      if (parsed.length === 0) throw new Error('No TLEs parsed');
+      return parsed;
+    } catch(err) {
+      console.error(`${constellation} TLE fetch error:`, err);
+      return [];
+    }
+  }
+
+  async function loadAllTLE() {
+    setStatus('Fetching GPS + Galileo TLEs from CelesTrak…', false);
+    const [gps, gal] = await Promise.all([
+      loadConstellation('GPS'),
+      loadConstellation('Galileo')
+    ]);
+    gpsSats = gps;
+    galSats = gal;
+    const total = gps.length + gal.length;
+    if (total > 0) {
+      setStatus(`Tracking ${gps.length} GPS + ${gal.length} Galileo satellites · Live`, true);
+    } else {
+      setStatus('⚠ Could not load TLE data', false);
+    }
+  }
+
+  /* ── WORLD MAP ────────────────────────────────────────────── */
+  async function loadWorld() {
+    try {
+      const topo = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r=>r.json());
+      const col  = topojson.feature(topo, topo.objects.countries);
+      worldPolys = [];
+      col.features.forEach(f => {
+        const g = f.geometry;
+        if (!g) return;
+        if (g.type==='Polygon')      worldPolys.push(g.coordinates);
+        if (g.type==='MultiPolygon') g.coordinates.forEach(p=>worldPolys.push(p));
+      });
+    } catch(e) { console.warn('World map error:', e); }
+  }
+
+  /* ── HELPERS ──────────────────────────────────────────────── */
+  function setStatus(msg, live) {
+    document.getElementById('status-msg').textContent = msg;
+    const dot = document.getElementById('status-dot');
+    dot.className = 'status-dot' + (live ? ' live' : '');
+    dot.style.background = live ? 'var(--gps)' : '#e06c6c';
+  }
+
+  /* ── INIT ─────────────────────────────────────────────────── */
+  async function init() {
+    await Promise.all([loadWorld(), loadAllTLE()]);
+    requestAnimationFrame(animate);
+    setInterval(loadAllTLE, 6 * 60 * 60 * 1000);  // refresh every 6h
+  }
+
+  init();
+
+})();
+</script>
+
+</body>
+</html>
