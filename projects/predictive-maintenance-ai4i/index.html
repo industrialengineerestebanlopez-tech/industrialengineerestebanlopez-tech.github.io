@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Predictive Maintenance of a Milling Machine · TPM / DMAIC — Esteban López</title>
+<meta name="description" content="TPM & DMAIC case study on the AI4I 2020 dataset: Pareto of failure modes, physics-based features and a failure-prediction model judged on recall, not accuracy.">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0b1f3a; --ink:#16202e; --muted:#5b6b7f; --accent:#16b3c7; --accent2:#3fd2c7;
+    --gold:#f2c14e; --bg:#f6f8fb; --card:#fff; --line:#e3e9f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+  a{color:var(--accent)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header{background:radial-gradient(900px 380px at 80% -10%,rgba(22,179,199,.22),transparent),linear-gradient(135deg,var(--navy),#071528);color:#fff;padding:52px 0 46px}
+  .back{display:inline-block;color:#9fd9e4;text-decoration:none;font-size:.9rem;margin-bottom:18px}
+  .tag{display:inline-block;background:rgba(22,179,199,.16);color:var(--accent2);border:1px solid rgba(22,179,199,.4);
+       padding:3px 11px;border-radius:20px;font-size:.78rem;font-weight:600;letter-spacing:.4px;margin-right:6px}
+  header h1{font-size:2.1rem;line-height:1.2;margin:16px 0 10px;font-weight:700}
+  header p.lead{color:#cddbe9;max-width:780px;font-size:1.05rem}
+  .meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:26px;font-size:.9rem;color:#9fd9e4}
+  .meta b{color:#fff;display:block;font-size:1.05rem}
+  section{padding:42px 0;border-bottom:1px solid var(--line)}
+  h2{color:var(--navy);font-size:1.45rem;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  h2 .step{background:var(--accent);color:#04222a;font-size:.72rem;font-weight:800;padding:3px 9px;border-radius:6px;letter-spacing:1px}
+  .sub{color:var(--muted);margin-bottom:22px;max-width:810px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;border-left:4px solid var(--accent)}
+  .kpi .n{font-size:2rem;font-weight:700;color:var(--navy)}
+  .kpi .l{color:var(--muted);font-size:.86rem;margin-top:2px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(11,31,58,.05)}
+  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}header h1{font-size:1.7rem}}
+  .insight{background:#e8f7fa;border:1px solid #bfe7ee;border-left:4px solid var(--accent);
+           border-radius:10px;padding:16px 18px;margin-top:18px;font-size:.95rem}
+  .insight b{color:#0c7c8c}
+  ul.clean{list-style:none;display:grid;gap:12px;margin-top:6px}
+  ul.clean li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  ul.clean li b{color:var(--navy)}
+  .pill{display:inline-block;font-size:.74rem;font-weight:700;color:#04222a;background:var(--accent2);padding:2px 8px;border-radius:20px;margin-right:8px}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--navy);font-size:.8rem;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chip{background:#eef4f8;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.84rem;color:var(--navy);font-weight:600}
+  .hl{background:#fff7e6;border:1px solid #f3e2b8;border-left:4px solid var(--gold);border-radius:10px;padding:16px 18px;margin-top:18px;font-size:.95rem}
+  .hl b{color:#9a7a18}
+  footer{padding:34px 0;color:var(--muted);font-size:.85rem;text-align:center}
+  .btns{margin-top:24px;display:flex;gap:12px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 20px;border-radius:9px;font-weight:700;text-decoration:none;font-size:.92rem}
+  .btn.primary{background:var(--accent);color:#04222a}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff}
+  code{background:#eef4f8;padding:2px 6px;border-radius:5px;font-size:.85em}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="back" href="../../index.html">&larr; Back to portfolio</a>
+    <div>
+      <span class="tag">TPM / Reliability</span>
+      <span class="tag">DMAIC</span>
+      <span class="tag">Python · ML</span>
+    </div>
+    <h1>Predictive maintenance of a milling machine</h1>
+    <p class="lead">A reliability case study on 10,000 operating cycles of a milling machine: prioritising
+    failure modes with a Pareto chart, engineering features from the <b>physics of failure</b>, and a model
+    that flags a breakdown <b>before</b> it happens to protect availability (OEE). Framework: the <b>DMAIC</b> cycle.</p>
+    <div class="meta">
+      <div><b>10,000</b>operating cycles</div>
+      <div><b>3.4%</b>failure rate</div>
+      <div><b>≈30</b>cycles MTBF</div>
+      <div><b>UCI #601</b>AI4I 2020 dataset</div>
+    </div>
+    <div class="btns">
+      <a class="btn primary" href="predictive_maintenance_analysis.ipynb">View technical notebook</a>
+      <a class="btn ghost" href="A3_Predictive_Maintenance_AI4I.docx">Download A3 report</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">DEFINE</span> The problem</h2>
+    <p class="sub">Unplanned breakdowns are the enemy of <b>availability</b> — the first pillar of OEE. Reactive
+    maintenance means stopping the line when it is most expensive. The goal: predict failures early enough to
+    convert unplanned stops into planned interventions (the heart of TPM).</p>
+    <div class="kpis">
+      <div class="kpi"><div class="n">5 → 3</div><div class="l">failure modes that hold most breakdowns</div></div>
+      <div class="kpi"><div class="n">82.6%</div><div class="l">of failures from just 3 modes (heat, overstrain, power)</div></div>
+      <div class="kpi"><div class="n">3.4%</div><div class="l">failure rate — a rare, imbalanced target</div></div>
+      <div class="kpi"><div class="n">≈30</div><div class="l">cycles mean time between failures (MTBF)</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">MEASURE · ANALYZE</span> Which failure mode first?</h2>
+    <p class="sub">A Pareto of the five failure modes shows where reliability effort pays off. The donut shows the
+    core modelling challenge: only 3.4% of cycles fail.</p>
+    <div class="grid2">
+      <div class="card"><canvas id="pareto" height="240"></canvas></div>
+      <div class="card"><canvas id="donut" height="240"></canvas></div>
+    </div>
+    <div class="insight">
+      <b>Finding:</b> Heat-dissipation (HDF, 115), Overstrain (OSF, 98) and Power (PWF, 95) failures account for
+      <b>82.6%</b> of all failure occurrences. They share one physical root — torque, rotational speed and the
+      air–process temperature gap — so those physics become the model's features.
+    </div>
+
+    <h2 style="margin-top:34px"><span class="step">ANALYZE</span> Physics of failure (features)</h2>
+    <p class="sub">Instead of feeding raw sensors blindly, I derive the quantities that actually cause the vital-few modes:</p>
+    <div class="stack">
+      <span class="chip">Mechanical power = Torque × angular speed → power failures</span>
+      <span class="chip">Temperature gap = Process − Air → heat-dissipation failures</span>
+      <span class="chip">Tool wear × Torque → overstrain failures</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">IMPROVE</span> Failure-prediction model</h2>
+    <p class="sub">A Random Forest predicts the <code>Machine failure</code> label from the process variables and the
+    engineered physics.</p>
+    <div class="hl">
+      <b>Engineering judgement:</b> with only 3.4% failures, <b>accuracy is misleading</b> — a model that predicts
+      “never fails” already scores ~96.6%. The metric that matters for maintenance is <b>recall on the failure
+      class</b>: the share of real breakdowns caught in time.
+    </div>
+    <div class="grid2" style="margin-top:18px">
+      <div class="card">
+        <table>
+          <tr><th>Model aspect</th><th></th></tr>
+          <tr><td>Algorithm</td><td class="num">Random Forest (400 trees)</td></tr>
+          <tr><td>Imbalance handling</td><td class="num">class_weight = balanced</td></tr>
+          <tr><td>Validation</td><td class="num">stratified 25% hold-out</td></tr>
+          <tr><td>Judged on</td><td class="num">Recall · F1 · ROC-AUC · PR-AUC</td></tr>
+          <tr><td>Lever</td><td class="num">decision-threshold tuning</td></tr>
+        </table>
+        <p style="font-size:.8rem;color:var(--muted);margin-top:10px">The notebook computes the exact metrics,
+        confusion matrix and feature importance on the full data.</p>
+      </div>
+      <div class="card">
+        <b style="color:var(--navy)">What the notebook delivers</b>
+        <ul class="clean" style="margin-top:12px">
+          <li><span class="pill">1</span>Failure-class recall / precision / F1</li>
+          <li><span class="pill">2</span>Confusion matrix (caught vs missed breakdowns)</li>
+          <li><span class="pill">3</span>Feature importance (which physics predicts failure)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">CONTROL</span> From prediction to avoided downtime</h2>
+    <ul class="clean">
+      <li><b>Predict, don't react.</b> Each flagged failure turns an unplanned stop into a planned one — a direct lift to availability and OEE.</li>
+      <li><b>Prioritise the vital-few modes.</b> Set SPC limits on temperature gap, torque and mechanical power (HDF, OSF, PWF).</li>
+      <li><b>Tune the threshold, not just the model.</b> Trade false alarms for higher recall based on the cost of a breakdown vs. a check.</li>
+      <li><b>Condition-based alarms.</b> Turn the top features into simple shop-floor thresholds as a poka-yoke backup.</li>
+      <li><b>PDCA.</b> Track MTBF and recall monthly; retrain as tooling and the machine change.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Portfolio case study · Esteban López — Industrial Engineering &nbsp;·&nbsp;
+    Data: <a href="https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset">AI4I 2020 Predictive Maintenance — UCI ML Repository #601</a>.
+  </div>
+</footer>
+
+<script>
+const labels = ['HDF','OSF','PWF','TWF','RNF'];
+const full   = ['Heat dissipation','Overstrain','Power','Tool wear','Random'];
+const vals   = [115,98,95,46,19];
+const occ    = vals.reduce((a,b)=>a+b,0);
+let run=0; const cum = vals.map(v=>{run+=v; return +(run/occ*100).toFixed(1);});
+const navy='#0b1f3a', cyan='#16b3c7', gold='#f2c14e', soft='#9fb3c8';
+// highlight the "vital few" up to and including the bar that crosses 80%
+const barColors = cum.map((c,i)=> (i===0 || cum[i-1] < 80) ? cyan : soft);
+
+new Chart(document.getElementById('pareto'),{
+  data:{labels:labels.map((l,i)=>l),
+    datasets:[
+      {type:'bar',label:'Failure occurrences',data:vals,backgroundColor:barColors,yAxisID:'y',order:2},
+      {type:'line',label:'Cumulative %',data:cum,borderColor:gold,backgroundColor:gold,
+       yAxisID:'y1',tension:.3,pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:gold,borderWidth:2,order:1}
+    ]},
+  options:{responsive:true,
+    plugins:{legend:{display:true,position:'bottom'},
+      title:{display:true,text:'Pareto of failure modes (373 occurrences)',color:navy,font:{size:13,weight:'bold'}},
+      tooltip:{callbacks:{title:(it)=>full[it[0].dataIndex]+' ('+labels[it[0].dataIndex]+')'}}},
+    scales:{
+      y:{title:{display:true,text:'Occurrences'},beginAtZero:true},
+      y1:{position:'right',min:0,max:108,grid:{drawOnChartArea:false},title:{display:true,text:'Cum. %'}}
+    }}
+});
+
+new Chart(document.getElementById('donut'),{
+  type:'doughnut',
+  data:{labels:['Healthy (9,661)','Failure (339)'],datasets:[{data:[9661,339],
+    backgroundColor:[navy,gold],borderColor:'#fff',borderWidth:2}]},
+  options:{responsive:true,cutout:'62%',
+    plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+      title:{display:true,text:'Class imbalance · 3.4% fail',color:navy,font:{size:13,weight:'bold'}}}}
+});
+</script>
+</body>
+</html>
