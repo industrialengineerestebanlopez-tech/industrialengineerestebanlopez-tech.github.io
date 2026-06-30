@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Line Balancing of a Packaging Line · SimPy Simulation — Esteban López</title>
+<meta name="description" content="Discrete-event simulation (SimPy) of a 6-station line: bottleneck vs takt, line balancing, and the gain in throughput, lead time and WIP.">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0b1f3a; --ink:#16202e; --muted:#5b6b7f; --accent:#16b3c7; --accent2:#3fd2c7;
+    --gold:#f2c14e; --bg:#f6f8fb; --card:#fff; --line:#e3e9f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+  a{color:var(--accent)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header{background:radial-gradient(900px 380px at 80% -10%,rgba(22,179,199,.22),transparent),linear-gradient(135deg,var(--navy),#071528);color:#fff;padding:52px 0 46px}
+  .back{display:inline-block;color:#9fd9e4;text-decoration:none;font-size:.9rem;margin-bottom:18px}
+  .tag{display:inline-block;background:rgba(22,179,199,.16);color:var(--accent2);border:1px solid rgba(22,179,199,.4);
+       padding:3px 11px;border-radius:20px;font-size:.78rem;font-weight:600;letter-spacing:.4px;margin-right:6px}
+  header h1{font-size:2.1rem;line-height:1.2;margin:16px 0 10px;font-weight:700}
+  header p.lead{color:#cddbe9;max-width:790px;font-size:1.05rem}
+  .meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:26px;font-size:.9rem;color:#9fd9e4}
+  .meta b{color:#fff;display:block;font-size:1.05rem}
+  section{padding:42px 0;border-bottom:1px solid var(--line)}
+  h2{color:var(--navy);font-size:1.45rem;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  h2 .step{background:var(--accent);color:#04222a;font-size:.72rem;font-weight:800;padding:3px 9px;border-radius:6px;letter-spacing:1px}
+  .sub{color:var(--muted);margin-bottom:22px;max-width:820px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;border-left:4px solid var(--accent)}
+  .kpi .n{font-size:2rem;font-weight:700;color:var(--navy)}
+  .kpi .l{color:var(--muted);font-size:.86rem;margin-top:2px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(11,31,58,.05)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}header h1{font-size:1.7rem}}
+  .insight{background:#e8f7fa;border:1px solid #bfe7ee;border-left:4px solid var(--accent);
+           border-radius:10px;padding:16px 18px;margin-top:18px;font-size:.95rem}
+  .insight b{color:#0c7c8c}
+  ul.clean{list-style:none;display:grid;gap:12px;margin-top:6px}
+  ul.clean li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  ul.clean li b{color:var(--navy)}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--navy);font-size:.8rem;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .res td:last-child{font-weight:700;color:var(--navy)}
+  footer{padding:34px 0;color:var(--muted);font-size:.85rem;text-align:center}
+  .btns{margin-top:24px;display:flex;gap:12px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 20px;border-radius:9px;font-weight:700;text-decoration:none;font-size:.92rem}
+  .btn.primary{background:var(--accent);color:#04222a}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff}
+  code{background:#eef4f8;padding:2px 6px;border-radius:5px;font-size:.85em}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="back" href="../industrial-organization/index.html">&larr; Back to Industrial Organization</a>
+    <div>
+      <span class="tag">Lean · Line Balancing</span>
+      <span class="tag">Discrete-Event Simulation</span>
+      <span class="tag">SimPy · OR</span>
+    </div>
+    <h1>Line balancing of a packaging line</h1>
+    <p class="lead">Most shop-floor work happens on site — so here I show the <b>method</b> on a digital twin. A
+    6-station packaging line is modelled in <b>SimPy</b> to find the bottleneck, compare it against <b>takt time</b>,
+    and quantify the gain from <b>balancing the line</b> in throughput, lead time and WIP.</p>
+    <div class="meta">
+      <div><b>45 s</b>takt time (80 u/h demand)</div>
+      <div><b>S3 = 55 s</b>bottleneck (above takt)</div>
+      <div><b>+31%</b>throughput after balancing</div>
+      <div><b>SimPy</b>discrete-event model</div>
+    </div>
+    <div class="btns">
+      <a class="btn primary" href="line_balancing_simulation.ipynb">View technical notebook</a>
+      <a class="btn ghost" href="A3_Line_Balancing_SimPy.docx">Download A3 report</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">DEFINE</span> The problem</h2>
+    <p class="sub">A packaging/conditioning line must deliver 80 units/hour, so its <b>takt time</b> is
+    45 s/unit. If any single station needs longer than takt, it throttles the whole line and demand is missed.
+    The question: where is the bottleneck, and how much do we gain by rebalancing — without touching the
+    physical line first?</p>
+    <div class="kpis">
+      <div class="kpi"><div class="n">45 s</div><div class="l">takt time required by demand</div></div>
+      <div class="kpi"><div class="n">1.22</div><div class="l">utilisation of station S3 — overloaded</div></div>
+      <div class="kpi"><div class="n">65 → 86</div><div class="l">units/hour after balancing</div></div>
+      <div class="kpi"><div class="n">No → Yes</div><div class="l">demand met after balancing</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">MEASURE · ANALYZE</span> Bottleneck vs takt</h2>
+    <p class="sub">Each station's cycle time against takt. Any bar above the dashed line is a station that cannot
+    keep up with demand — here, station S3.</p>
+    <div class="grid2">
+      <div class="card"><canvas id="bottleneck" height="250"></canvas></div>
+      <div class="card"><canvas id="balance" height="250"></canvas></div>
+    </div>
+    <div class="insight">
+      <b>Finding:</b> S3 needs 55 s but takt is 45 s → utilisation 1.22 (>1). A single overloaded station caps the
+      line at ~65 u/h, below the 80 u/h demand. Rebalancing ~13 s of S3's work to lighter stations (same total work
+      content) puts every station under takt.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">IMPROVE</span> Result of balancing</h2>
+    <p class="sub">The SimPy model quantifies the gain before any physical change:</p>
+    <table class="res">
+      <tr><th>Metric</th><th>Before</th><th>After</th></tr>
+      <tr><td>Bottleneck cycle time</td><td>55 s (S3)</td><td>42 s</td></tr>
+      <tr><td>Throughput</td><td>~65 u/h</td><td>~86 u/h (+31%)</td></tr>
+      <tr><td>Mean lead time</td><td>backlog grows</td><td>≈27 min</td></tr>
+      <tr><td>Average WIP</td><td>unbounded</td><td>≈37 units</td></tr>
+      <tr><td>Demand (80 u/h) met?</td><td>No</td><td>Yes</td></tr>
+    </table>
+    <p class="sub" style="margin-top:14px">Same total work content (221 s) — the gain comes purely from
+    <b>balancing</b>, not from adding labour.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">CONTROL</span> Sustain the balance</h2>
+    <ul class="clean">
+      <li><b>Standardised work</b> at each station so cycle times stay near the balanced target.</li>
+      <li><b>Visual takt</b> on the line; react when a station drifts above it (the new bottleneck).</li>
+      <li><b>Re-balance when demand changes</b> — takt is set by demand, so recompute when the order rate moves.</li>
+      <li><b>Attack variability, not just the mean.</b> The simulation shows high variability inflates WIP and lead time even when means fit under takt.</li>
+      <li><b>PDCA by simulation.</b> Test every proposed change on the model before touching the physical line.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Portfolio case study · Esteban López — Industrial Engineering &nbsp;·&nbsp; Discrete-event simulation in SimPy (synthetic line, realistic parameters).
+  </div>
+</footer>
+
+<script>
+const stations = ['S1','S2','S3','S4','S5','S6'];
+const base = [30,35,55,33,40,28];
+const bal  = [38,38,42,38,37,28];
+const TAKT = 45;
+const navy='#0b1f3a', cyan='#16b3c7', gold='#f2c14e', soft='#9fb3c8';
+
+new Chart(document.getElementById('bottleneck'),{
+  data:{labels:stations,
+    datasets:[
+      {type:'bar',label:'Cycle time (s)',data:base,backgroundColor:base.map(t=>t>TAKT?gold:cyan),order:2},
+      {type:'line',label:'Takt (45 s)',data:stations.map(()=>TAKT),borderColor:'#5b6b7f',borderDash:[6,5],
+       pointRadius:0,borderWidth:2,order:1}
+    ]},
+  options:{responsive:true,plugins:{legend:{position:'bottom'},
+      title:{display:true,text:'Before — cycle time vs takt',color:navy,font:{size:13,weight:'bold'}}},
+    scales:{y:{beginAtZero:true,title:{display:true,text:'seconds'}}}}
+});
+
+new Chart(document.getElementById('balance'),{
+  data:{labels:stations,
+    datasets:[
+      {type:'bar',label:'Before',data:base,backgroundColor:soft,order:3},
+      {type:'bar',label:'After',data:bal,backgroundColor:cyan,order:2},
+      {type:'line',label:'Takt (45 s)',data:stations.map(()=>TAKT),borderColor:gold,borderDash:[6,5],
+       pointRadius:0,borderWidth:2,order:1}
+    ]},
+  options:{responsive:true,plugins:{legend:{position:'bottom'},
+      title:{display:true,text:'After — every station under takt',color:navy,font:{size:13,weight:'bold'}}},
+    scales:{y:{beginAtZero:true,title:{display:true,text:'seconds'}}}}
+});
+</script>
+</body>
+</html>

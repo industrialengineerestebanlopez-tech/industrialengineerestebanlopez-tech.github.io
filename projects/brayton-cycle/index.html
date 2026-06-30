@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gas-Turbine Engine · Brayton Cycle — Esteban López</title>
+<meta name="description" content="Brayton (gas-turbine) cycle analysis: T-s diagram, efficiency, the 56% back-work ratio, optimum pressure ratio, and the link to jet propulsion and aerospace.">
+<style>
+  :root{
+    --navy:#0b1f3a; --ink:#16202e; --muted:#5b6b7f; --accent:#16b3c7; --accent2:#3fd2c7;
+    --gold:#f2c14e; --bg:#f6f8fb; --card:#fff; --line:#e3e9f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+  a{color:var(--accent)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header{background:radial-gradient(900px 380px at 80% -10%,rgba(22,179,199,.22),transparent),linear-gradient(135deg,var(--navy),#071528);color:#fff;padding:52px 0 46px}
+  .back{display:inline-block;color:#9fd9e4;text-decoration:none;font-size:.9rem;margin-bottom:18px}
+  .tag{display:inline-block;background:rgba(22,179,199,.16);color:var(--accent2);border:1px solid rgba(22,179,199,.4);
+       padding:3px 11px;border-radius:20px;font-size:.78rem;font-weight:600;letter-spacing:.4px;margin-right:6px}
+  header h1{font-size:2.05rem;line-height:1.2;margin:16px 0 10px;font-weight:700}
+  header p.lead{color:#cddbe9;max-width:800px;font-size:1.04rem}
+  .meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:26px;font-size:.9rem;color:#9fd9e4}
+  .meta b{color:#fff;display:block;font-size:1.05rem}
+  section{padding:42px 0;border-bottom:1px solid var(--line)}
+  h2{color:var(--navy);font-size:1.45rem;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  h2 .step{background:var(--accent);color:#04222a;font-size:.72rem;font-weight:800;padding:3px 9px;border-radius:6px;letter-spacing:1px}
+  .sub{color:var(--muted);margin-bottom:20px;max-width:820px}
+  p.body{max-width:820px;margin-bottom:12px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;border-left:4px solid var(--accent)}
+  .kpi .n{font-size:1.7rem;font-weight:700;color:var(--navy)}
+  .kpi .l{color:var(--muted);font-size:.84rem;margin-top:2px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(11,31,58,.05)}
+  .card img{width:100%;border-radius:8px;display:block}
+  .grid2{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;align-items:start}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}header h1{font-size:1.7rem}}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--navy);font-size:.78rem;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .eq{background:#0b1f3a;color:#dff3f7;border-radius:10px;padding:14px 18px;margin-top:6px;font-family:'Cambria Math',Georgia,serif;font-size:1.02rem}
+  .eq small{color:#9fd9e4;font-family:'Segoe UI',sans-serif;font-size:.8rem;display:block;margin-top:4px}
+  .insight{background:#e8f7fa;border:1px solid #bfe7ee;border-left:4px solid var(--accent);border-radius:10px;padding:16px 18px;margin-top:18px;font-size:.95rem}
+  .insight b{color:#0c7c8c}
+  .aero{background:linear-gradient(135deg,#0b1f3a,#10325a);color:#eaf4f7;border-radius:14px;padding:26px 26px;margin-top:6px}
+  .aero h3{color:#fff;font-size:1.2rem;margin-bottom:8px}
+  .aero p{color:#cddbe9;max-width:840px;margin-bottom:10px}
+  .aero .eqa{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:12px 16px;
+             font-family:'Cambria Math',Georgia,serif;font-size:1.05rem;color:#fff;display:inline-block;margin-top:6px}
+  .aero b{color:var(--gold)}
+  ul.clean{list-style:none;display:grid;gap:12px;margin-top:6px}
+  ul.clean li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  ul.clean li b{color:var(--navy)}
+  footer{padding:34px 0;color:var(--muted);font-size:.85rem;text-align:center}
+  .btns{margin-top:24px;display:flex;gap:12px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 20px;border-radius:9px;font-weight:700;text-decoration:none;font-size:.92rem}
+  .btn.primary{background:var(--accent);color:#04222a}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff}
+  code{background:#eef4f8;padding:2px 6px;border-radius:5px;font-size:.85em}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="back" href="../thermal-energy/index.html">&larr; Back to Thermal &amp; Energy Engineering</a>
+    <div>
+      <span class="tag">Thermodynamics</span>
+      <span class="tag">Gas Turbine · Jet Propulsion</span>
+      <span class="tag">Power Cycles</span>
+    </div>
+    <h1>Gas-turbine engine — Brayton cycle</h1>
+    <p class="lead">The thermodynamic cycle behind every gas turbine and <b>jet engine</b>. Full air-standard analysis:
+    each state, efficiency with real compressor/turbine losses, the <b>back-work ratio</b>, the <b>optimum pressure
+    ratio</b> for maximum net work — and the direct link to <b>jet propulsion and aerospace</b>.</p>
+    <div class="meta">
+      <div><b>36.2%</b>real thermal efficiency</div>
+      <div><b>50.8%</b>ideal efficiency</div>
+      <div><b>56%</b>back-work ratio</div>
+      <div><b>1400 K</b>turbine-inlet temp.</div>
+    </div>
+    <div class="btns">
+      <a class="btn primary" href="brayton_cycle_analysis.ipynb">View technical notebook</a>
+      <a class="btn ghost" href="Brayton_Cycle_Report.docx">Download report</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">PROBLEM</span> Specification</h2>
+    <p class="body">Analyse an air-standard Brayton cycle: <b>pressure ratio 12</b>, <b>turbine-inlet temperature
+    1400 K</b>, compressor η = 0.85, turbine η = 0.88, inlet 288 K / 100 kPa. Find the efficiency, the work split
+    between compressor and turbine, and the pressure ratio that maximises net work.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="n">rp = 12</div><div class="l">compressor pressure ratio</div></div>
+      <div class="kpi"><div class="n">1400 K</div><div class="l">turbine-inlet temperature (TIT)</div></div>
+      <div class="kpi"><div class="n">0.85 / 0.88</div><div class="l">compressor / turbine η</div></div>
+      <div class="kpi"><div class="n">277 kJ/kg</div><div class="l">net specific work</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">METHOD · RESULTS</span> Cycle states &amp; T–s diagram</h2>
+    <div class="grid2">
+      <div class="card"><img src="assets/ts_diagram.png" alt="Brayton cycle T-s diagram"></div>
+      <div>
+        <table>
+          <tr><th>State</th><th>Point</th></tr>
+          <tr><td>1 — compressor inlet</td><td class="num">288 K · 100 kPa</td></tr>
+          <tr><td>2 — compressor exit</td><td class="num">638 K · 1200 kPa</td></tr>
+          <tr><td>3 — turbine inlet</td><td class="num">1400 K · 1200 kPa</td></tr>
+          <tr><td>4 — turbine exit</td><td class="num">774 K · 100 kPa</td></tr>
+        </table>
+        <div class="eq">η<sub>th</sub> = (w<sub>turbine</sub> − w<sub>compressor</sub>) / q<sub>in</sub>
+          <small>w<sub>t</sub> ≈ 629 · w<sub>c</sub> ≈ 352 · q<sub>in</sub> ≈ 765 kJ/kg → η ≈ 36 %</small>
+        </div>
+        <div class="insight"><b>The efficiency gap:</b> the ideal cycle would reach 50.8 %, but real compressor and
+        turbine losses pull it down to 36.2 % — a far bigger drop than in a steam cycle, because of the back-work
+        ratio (below).</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">OPTIMISE</span> Optimum pressure ratio &amp; back-work</h2>
+    <p class="sub">Efficiency rises with pressure ratio, but <b>net work peaks</b> — there is an optimum rp for a given
+    turbine-inlet temperature. And the compressor is expensive: it eats most of the turbine's output.</p>
+    <div class="grid2">
+      <div class="card"><img src="assets/optimum_rp.png" alt="Net work and efficiency vs pressure ratio"></div>
+      <div class="card"><img src="assets/bwr_compare.png" alt="Back-work ratio: Brayton vs Rankine"></div>
+    </div>
+    <div class="insight"><b>Back-work ratio = 56 %</b> — the compressor consumes more than half of the turbine work,
+    versus &lt; 1 % for the pump in a steam (Rankine) cycle. That is why a few points of compressor/turbine efficiency
+    swing the whole engine, and why <b>turbine-inlet temperature</b> (limited by blade materials and cooling) is the
+    dominant design lever.</div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">AEROSPACE LINK</span> From gas turbine to jet engine</h2>
+    <div class="aero">
+      <h3>A turbojet is an open Brayton cycle</h3>
+      <p>Replace the closed loop with the atmosphere and the same four processes appear: the inlet and compressor
+      raise the air pressure (1→2), the combustor adds heat (2→3), and the turbine expands the gas (3→4) — but here the
+      turbine only has to drive the <b>compressor</b>. All the <b>remaining energy is left in the fast exhaust jet</b>,
+      which produces <b>thrust</b>:</p>
+      <div class="eqa">F = ṁ · (V<sub>exit</sub> − V<sub>inlet</sub>) + (p<sub>e</sub> − p<sub>0</sub>)·A<sub>e</sub></div>
+      <p style="margin-top:12px">The very same analysis sizes <b>aircraft engines</b>, <b>auxiliary power units (APUs)</b>,
+      and the gas turbines behind ground and marine power. It is also the bridge in my own profile: the reliability,
+      availability and performance thinking I apply to <b>industrial systems</b> is the same that governs <b>propulsion
+      and aerospace power systems</b> — and connects naturally to my work in <b>satellite navigation (GNSS)</b>, where
+      availability, integrity and continuity are the equivalent figures of merit.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">CONCLUSION</span> What this enables</h2>
+    <ul class="clean">
+      <li><b>Pick the pressure ratio.</b> Net work peaks at an optimum rp for the chosen turbine-inlet temperature.</li>
+      <li><b>Chase TIT.</b> Turbine-inlet temperature is the dominant lever — hence materials and blade cooling.</li>
+      <li><b>Understand the trade with Brayton vs Rankine.</b> The 56 % back-work ratio explains the two cycles' very different behaviour.</li>
+      <li><b>Extend to real engines.</b> Regeneration, intercooling, reheat — and combined Brayton–Rankine plants, the most efficient on Earth.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Portfolio case study · Esteban López — Industrial Engineering &nbsp;·&nbsp;
+    Air-standard Brayton analysis · fully reproducible notebook.
+  </div>
+</footer>
+</body>
+</html>
