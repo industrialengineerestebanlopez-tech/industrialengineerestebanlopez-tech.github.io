@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Defect Reduction in a Steel Rolling Line · Lean / DMAIC — Esteban López</title>
+<meta name="description" content="Lean & Six Sigma (DMAIC) case study on the Steel Plates Faults dataset: Pareto of defects, SPC/Cpk and an inspection-support classifier.">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0b1f3a; --ink:#16202e; --muted:#5b6b7f; --accent:#16b3c7; --accent2:#3fd2c7;
+    --gold:#f2c14e; --bg:#f6f8fb; --card:#fff; --line:#e3e9f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+  a{color:var(--accent)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header{background:radial-gradient(900px 380px at 80% -10%,rgba(22,179,199,.22),transparent),linear-gradient(135deg,var(--navy),#071528);color:#fff;padding:52px 0 46px}
+  .back{display:inline-block;color:#9fd9e4;text-decoration:none;font-size:.9rem;margin-bottom:18px}
+  .tag{display:inline-block;background:rgba(22,179,199,.16);color:var(--accent2);border:1px solid rgba(22,179,199,.4);
+       padding:3px 11px;border-radius:20px;font-size:.78rem;font-weight:600;letter-spacing:.4px;margin-right:6px}
+  header h1{font-size:2.1rem;line-height:1.2;margin:16px 0 10px;font-weight:700}
+  header p.lead{color:#cddbe9;max-width:760px;font-size:1.05rem}
+  .meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:26px;font-size:.9rem;color:#9fd9e4}
+  .meta b{color:#fff;display:block;font-size:1.05rem}
+  section{padding:42px 0;border-bottom:1px solid var(--line)}
+  h2{color:var(--navy);font-size:1.45rem;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  h2 .step{background:var(--accent);color:#04222a;font-size:.72rem;font-weight:800;padding:3px 9px;border-radius:6px;letter-spacing:1px}
+  .sub{color:var(--muted);margin-bottom:22px;max-width:800px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;border-left:4px solid var(--accent)}
+  .kpi .n{font-size:2rem;font-weight:700;color:var(--navy)}
+  .kpi .l{color:var(--muted);font-size:.86rem;margin-top:2px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(11,31,58,.05)}
+  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}header h1{font-size:1.7rem}}
+  .insight{background:#e8f7fa;border:1px solid #bfe7ee;border-left:4px solid var(--accent);
+           border-radius:10px;padding:16px 18px;margin-top:18px;font-size:.95rem}
+  .insight b{color:#0c7c8c}
+  ul.clean{list-style:none;display:grid;gap:12px;margin-top:6px}
+  ul.clean li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  ul.clean li b{color:var(--navy)}
+  .pill{display:inline-block;font-size:.74rem;font-weight:700;color:#04222a;background:var(--accent2);padding:2px 8px;border-radius:20px;margin-right:8px}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--navy);font-size:.8rem;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chip{background:#eef4f8;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.84rem;color:var(--navy);font-weight:600}
+  footer{padding:34px 0;color:var(--muted);font-size:.85rem;text-align:center}
+  .btns{margin-top:24px;display:flex;gap:12px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 20px;border-radius:9px;font-weight:700;text-decoration:none;font-size:.92rem}
+  .btn.primary{background:var(--accent);color:#04222a}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff}
+  code{background:#eef4f8;padding:2px 6px;border-radius:5px;font-size:.85em}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="back" href="../../index.html">&larr; Back to portfolio</a>
+    <div>
+      <span class="tag">Lean / Six Sigma</span>
+      <span class="tag">DMAIC</span>
+      <span class="tag">Python · ML</span>
+    </div>
+    <h1>Defect reduction in a steel rolling line</h1>
+    <p class="lead">A continuous-improvement case study on real inspection data from 1,941 steel plates:
+    defect prioritisation with a Pareto chart, statistical process control (SPC / Cpk) and an
+    inspection-support classifier. Framework: the <b>DMAIC</b> cycle.</p>
+    <div class="meta">
+      <div><b>1,941</b>plates inspected</div>
+      <div><b>27</b>process variables</div>
+      <div><b>7</b>defect types</div>
+      <div><b>UCI #198</b>public dataset (Semeion)</div>
+    </div>
+    <div class="btns">
+      <a class="btn primary" href="steel_plates_faults_analysis.ipynb">View technical notebook</a>
+      <a class="btn ghost" href="A3_Steel_Plates_Faults.docx">Download A3 report</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">DEFINE</span> The problem</h2>
+    <p class="sub">In steel rolling, surface defects drive rework, scrap and customer claims. Without a
+    data-based priority, improvement effort scatters across many failure modes with very different impact.
+    Goal: find where to act first to remove the largest share of defects with the least effort.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="n">7 → 3</div><div class="l">defect types that hold most of the problem</div></div>
+      <div class="kpi"><div class="n">75.5%</div><div class="l">of defects come from just 3 categories</div></div>
+      <div class="kpi"><div class="n">12.2×</div><div class="l">imbalance ratio between most and least frequent defect</div></div>
+      <div class="kpi"><div class="n">0</div><div class="l">missing values — clean, traceable dataset</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">MEASURE · ANALYZE</span> Pareto chart</h2>
+    <p class="sub">The 80/20 rule separates the “vital few” from the “trivial many”. The cyan bars accumulate
+    ~80% of all defects — that is where improvement must focus.</p>
+    <div class="grid2">
+      <div class="card"><canvas id="pareto" height="240"></canvas></div>
+      <div class="card"><canvas id="donut" height="240"></canvas></div>
+    </div>
+    <div class="insight">
+      <b>Finding:</b> <b>Other_Faults (673)</b>, <b>Bumps (402)</b> and <b>K_Scatch (391)</b> account for 75.5% of all defective plates.
+      Moreover, the fact that the largest category is “Other_Faults” (a catch-all bucket) reveals an opportunity to
+      <b>improve the defect taxonomy and traceability</b> — a management finding, not only a process one.
+    </div>
+
+    <h2 style="margin-top:34px"><span class="step">ANALYZE</span> Root cause (Ishikawa)</h2>
+    <p class="sub">Candidate cause categories for the vital-few defects, to be validated on the shop floor with gemba and data.</p>
+    <div class="stack">
+      <span class="chip">Machine · roll wear</span>
+      <span class="chip">Material · composition / thickness</span>
+      <span class="chip">Method · rolling parameters</span>
+      <span class="chip">Measurement · inspection criteria</span>
+      <span class="chip">Manpower · human variability</span>
+      <span class="chip">Environment · temperature</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">ANALYZE</span> Statistical process control &amp; capability</h2>
+    <p class="sub">On continuous process variables (e.g. plate thickness) the notebook builds control charts and
+    computes the capability indices <code>Cp</code>/<code>Cpk</code> to detect drift before scrap is produced.</p>
+    <table>
+      <tr><th>Tool</th><th>What it does (Lean)</th></tr>
+      <tr><td>Control chart (±3σ)</td><td>Tell common-cause from special-cause variation; react in time</td></tr>
+      <tr><td>Cpk index</td><td>Quantify whether the process fits inside specification</td></tr>
+      <tr><td>Standardised class profile</td><td>See which variables characterise each vital defect</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">IMPROVE</span> Inspection-support classifier</h2>
+    <p class="sub">A Random Forest predicts the defect type from the vision/process variables, standardising the
+    inspection criterion (digital poka-yoke) and freeing up inspector time.</p>
+    <div class="grid2">
+      <div class="card">
+        <table>
+          <tr><th>Model aspect</th><th></th></tr>
+          <tr><td>Algorithm</td><td class="num">Random Forest (400 trees)</td></tr>
+          <tr><td>Validation</td><td class="num">stratified 25% hold-out</td></tr>
+          <tr><td>Imbalance handling</td><td class="num">class_weight = balanced</td></tr>
+          <tr><td>Metrics</td><td class="num">Accuracy · macro F1 · confusion matrix</td></tr>
+          <tr><td>Expected performance*</td><td class="num">~75–80% accuracy</td></tr>
+        </table>
+        <p style="font-size:.8rem;color:var(--muted);margin-top:10px">*Range reported in the literature for this dataset
+        (ensemble models). The notebook computes the exact value on the full data.</p>
+      </div>
+      <div class="card">
+        <b style="color:var(--navy)">Outputs the notebook generates</b>
+        <ul class="clean" style="margin-top:12px">
+          <li><span class="pill">1</span>Per-class classification report</li>
+          <li><span class="pill">2</span>Confusion matrix</li>
+          <li><span class="pill">3</span>Feature importance (what drives quality)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">CONTROL</span> Countermeasures &amp; sustainability</h2>
+    <ul class="clean">
+      <li><b>Prioritise the vital few.</b> Tackle Other_Faults, Bumps and K_Scatch first: ~75% of the problem at the lowest effort.</li>
+      <li><b>Redefine the defect taxonomy.</b> Shrink the “Other_Faults” catch-all to enable fine root-cause analysis.</li>
+      <li><b>SPC on critical variables.</b> Monitor the model's highest-importance variables with control charts.</li>
+      <li><b>Digital poka-yoke.</b> Deploy the classifier as inspection support to standardise the criterion.</li>
+      <li><b>PDCA loop.</b> Recompute the Pareto and retrain per shift/batch to verify the effect of countermeasures.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Portfolio case study · Esteban López — Industrial Engineering &nbsp;·&nbsp;
+    Data: <a href="https://archive.ics.uci.edu/dataset/198/steel+plates+faults">Steel Plates Faults — UCI ML Repository #198</a> (Semeion Research Center).
+  </div>
+</footer>
+
+<script>
+const labels = ['Other_Faults','Bumps','K_Scatch','Z_Scratch','Pastry','Stains','Dirtiness'];
+const vals   = [673,402,391,190,158,72,55];
+const total  = vals.reduce((a,b)=>a+b,0);
+let run=0; const cum = vals.map(v=>{run+=v; return +(run/total*100).toFixed(1);});
+const navy='#0b1f3a', cyan='#16b3c7', gold='#f2c14e', soft='#9fb3c8';
+const barColors = cum.map(c=> c<=80.5 ? cyan : soft);
+
+new Chart(document.getElementById('pareto'),{
+  data:{labels,
+    datasets:[
+      {type:'bar',label:'Defects',data:vals,backgroundColor:barColors,yAxisID:'y',order:2},
+      {type:'line',label:'Cumulative %',data:cum,borderColor:gold,backgroundColor:gold,
+       yAxisID:'y1',tension:.3,pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:gold,borderWidth:2,order:1}
+    ]},
+  options:{responsive:true,plugins:{legend:{display:true,position:'bottom'},
+      title:{display:true,text:'Pareto of defects (n=1941)',color:navy,font:{size:14,weight:'bold'}}},
+    scales:{
+      y:{title:{display:true,text:'Frequency'},beginAtZero:true},
+      y1:{position:'right',min:0,max:105,grid:{drawOnChartArea:false},title:{display:true,text:'Cum. %'}},
+      x:{ticks:{maxRotation:35,minRotation:20}}
+    }}
+});
+
+new Chart(document.getElementById('donut'),{
+  type:'doughnut',
+  data:{labels,datasets:[{data:vals,
+    backgroundColor:[navy,cyan,'#3fd2c7','#7fb3d5',gold,soft,'#c5ced6'],borderColor:'#fff',borderWidth:2}]},
+  options:{responsive:true,cutout:'58%',
+    plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:11}}},
+      title:{display:true,text:'Defect mix by type',color:navy,font:{size:14,weight:'bold'}}}}
+});
+</script>
+</body>
+</html>
