@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steam Power Plant · Rankine Cycle Analysis — Esteban López</title>
+<meta name="description" content="Thermodynamic analysis and optimisation of a steam Rankine cycle with CoolProp: T-s diagram, efficiency, back-work ratio and the boiler-pressure / superheat / condenser-pressure trade-offs.">
+<style>
+  :root{
+    --navy:#0b1f3a; --ink:#16202e; --muted:#5b6b7f; --accent:#16b3c7; --accent2:#3fd2c7;
+    --gold:#f2c14e; --bg:#f6f8fb; --card:#fff; --line:#e3e9f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+  a{color:var(--accent)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header{background:radial-gradient(900px 380px at 80% -10%,rgba(22,179,199,.22),transparent),linear-gradient(135deg,var(--navy),#071528);color:#fff;padding:52px 0 46px}
+  .back{display:inline-block;color:#9fd9e4;text-decoration:none;font-size:.9rem;margin-bottom:18px}
+  .tag{display:inline-block;background:rgba(22,179,199,.16);color:var(--accent2);border:1px solid rgba(22,179,199,.4);
+       padding:3px 11px;border-radius:20px;font-size:.78rem;font-weight:600;letter-spacing:.4px;margin-right:6px}
+  header h1{font-size:2.05rem;line-height:1.2;margin:16px 0 10px;font-weight:700}
+  header p.lead{color:#cddbe9;max-width:800px;font-size:1.04rem}
+  .meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:26px;font-size:.9rem;color:#9fd9e4}
+  .meta b{color:#fff;display:block;font-size:1.05rem}
+  section{padding:42px 0;border-bottom:1px solid var(--line)}
+  h2{color:var(--navy);font-size:1.45rem;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  h2 .step{background:var(--accent);color:#04222a;font-size:.72rem;font-weight:800;padding:3px 9px;border-radius:6px;letter-spacing:1px}
+  .sub{color:var(--muted);margin-bottom:20px;max-width:820px}
+  p.body{max-width:820px;margin-bottom:12px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;border-left:4px solid var(--accent)}
+  .kpi .n{font-size:1.7rem;font-weight:700;color:var(--navy)}
+  .kpi .l{color:var(--muted);font-size:.84rem;margin-top:2px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(11,31,58,.05)}
+  .card img{width:100%;border-radius:8px;display:block}
+  .grid2{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;align-items:start}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}header h1{font-size:1.7rem}}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--navy);font-size:.78rem;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .eq{background:#0b1f3a;color:#dff3f7;border-radius:10px;padding:14px 18px;margin-top:6px;font-family:'Cambria Math',Georgia,serif;font-size:1.02rem}
+  .eq small{color:#9fd9e4;font-family:'Segoe UI',sans-serif;font-size:.8rem;display:block;margin-top:4px}
+  .insight{background:#e8f7fa;border:1px solid #bfe7ee;border-left:4px solid var(--accent);border-radius:10px;padding:16px 18px;margin-top:18px;font-size:.95rem}
+  .insight b{color:#0c7c8c}
+  .hl{background:#fff7e6;border:1px solid #f3e2b8;border-left:4px solid var(--gold);border-radius:10px;padding:16px 18px;margin-top:18px;font-size:.95rem}
+  .hl b{color:#9a7a18}
+  ul.clean{list-style:none;display:grid;gap:12px;margin-top:6px}
+  ul.clean li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  ul.clean li b{color:var(--navy)}
+  footer{padding:34px 0;color:var(--muted);font-size:.85rem;text-align:center}
+  .btns{margin-top:24px;display:flex;gap:12px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 20px;border-radius:9px;font-weight:700;text-decoration:none;font-size:.92rem}
+  .btn.primary{background:var(--accent);color:#04222a}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff}
+  code{background:#eef4f8;padding:2px 6px;border-radius:5px;font-size:.85em}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="back" href="../thermal-energy/index.html">&larr; Back to Thermal &amp; Energy Engineering</a>
+    <div>
+      <span class="tag">Thermodynamics</span>
+      <span class="tag">Power Cycles</span>
+      <span class="tag">CoolProp · IAPWS</span>
+    </div>
+    <h1>Steam power plant — Rankine cycle analysis</h1>
+    <p class="lead">Full thermodynamic analysis and optimisation of a steam Rankine cycle: every state computed from
+    real steam properties (CoolProp / IAPWS-IF97), the <b>T–s diagram</b>, efficiency with real turbine and pump
+    losses, back-work ratio, and the three design levers — boiler pressure, superheat and condenser pressure.</p>
+    <div class="meta">
+      <div><b>33.4%</b>real thermal efficiency</div>
+      <div><b>39.4%</b>ideal efficiency</div>
+      <div><b>1069 kJ/kg</b>net work</div>
+      <div><b>0.88%</b>back-work ratio</div>
+    </div>
+    <div class="btns">
+      <a class="btn primary" href="rankine_cycle_analysis.ipynb">View technical notebook</a>
+      <a class="btn ghost" href="Rankine_Cycle_Report.docx">Download report</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">PROBLEM</span> Specification</h2>
+    <p class="body">Analyse a steam power plant running a Rankine cycle at <b>boiler 8 MPa</b>, <b>turbine inlet
+    500 °C</b> and <b>condenser 10 kPa</b>, with realistic component efficiencies (turbine 0.85, pump 0.85). Find the
+    thermal efficiency, the work split, the turbine-exit steam quality — and how to push the efficiency higher.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="n">8 MPa</div><div class="l">boiler pressure</div></div>
+      <div class="kpi"><div class="n">500 °C</div><div class="l">turbine inlet (superheated)</div></div>
+      <div class="kpi"><div class="n">10 kPa</div><div class="l">condenser pressure</div></div>
+      <div class="kpi"><div class="n">89%</div><div class="l">turbine-exit steam quality</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">METHOD · RESULTS</span> Cycle states &amp; T–s diagram</h2>
+    <div class="grid2">
+      <div class="card"><img src="assets/ts_diagram.png" alt="Rankine cycle T-s diagram"></div>
+      <div>
+        <table>
+          <tr><th>State</th><th>Point</th></tr>
+          <tr><td>1 — condenser exit</td><td class="num">sat. liquid, 10 kPa</td></tr>
+          <tr><td>2 — pump exit</td><td class="num">compressed liquid, 8 MPa</td></tr>
+          <tr><td>3 — turbine inlet</td><td class="num">superheated, 500 °C</td></tr>
+          <tr><td>4 — turbine exit</td><td class="num">x = 0.89, 10 kPa</td></tr>
+        </table>
+        <div class="eq">η<sub>th</sub> = w<sub>net</sub> / q<sub>in</sub> = (w<sub>turbine</sub> − w<sub>pump</sub>) / (h<sub>3</sub> − h<sub>2</sub>)
+          <small>w<sub>turbine</sub> ≈ 1079 · w<sub>pump</sub> ≈ 9.5 · q<sub>in</sub> ≈ 3198 kJ/kg</small>
+        </div>
+        <div class="insight"><b>Signature result:</b> the back-work ratio is <b>0.88 %</b> — the pump consumes almost
+        nothing. That is the core advantage of a vapour power cycle over a gas-turbine (Brayton) cycle, where the
+        compressor can eat 40–60 % of the turbine work.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">OPTIMISE</span> Three levers for efficiency</h2>
+    <p class="sub">Sweeping each design variable (everything else fixed) quantifies the three classic ways to raise
+    Rankine efficiency: higher superheat, higher boiler pressure, and lower condenser pressure.</p>
+    <div class="grid2">
+      <div class="card"><img src="assets/eta_tmax.png" alt="Efficiency vs turbine inlet temperature"></div>
+      <div class="card"><img src="assets/eta_pcond.png" alt="Efficiency vs condenser pressure"></div>
+    </div>
+    <div class="hl"><b>The real constraint:</b> raising boiler pressure and lowering condenser pressure both push the
+    turbine exit <b>wetter</b>. Below ~88 % quality, water droplets erode the last turbine blades — which is exactly
+    why real plants add <b>reheat</b>: it lifts efficiency <i>and</i> keeps the steam dry.</div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="step">CONCLUSION</span> What this enables</h2>
+    <ul class="clean">
+      <li><b>Fix the operating point.</b> The analysis sets boiler pressure, superheat and condenser pressure for a target efficiency.</li>
+      <li><b>Know the physical limit.</b> The wetness constraint at the turbine exit caps how far pressure/vacuum can be pushed.</li>
+      <li><b>Justify reheat &amp; regeneration.</b> The next design steps follow directly from the trade-off shown here.</li>
+      <li><b>Compare against Brayton.</b> The &lt;1 % back-work ratio quantifies why steam cycles dominate base-load power.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Portfolio case study · Esteban López — Industrial Engineering &nbsp;·&nbsp;
+    Steam properties via CoolProp (IAPWS-IF97) · fully reproducible notebook.
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thermal &amp; Energy Engineering — Esteban López</title>
+<meta name="description" content="Computational thermodynamics case studies: heat exchanger design (ε-NTU), steam Rankine cycle, and gas-turbine Brayton cycle.">
+<style>
+  :root{
+    --navy:#0b1f3a; --ink:#16202e; --muted:#5b6b7f; --accent:#16b3c7; --accent2:#3fd2c7;
+    --gold:#f2c14e; --bg:#f6f8fb; --card:#fff; --line:#e3e9f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+  a{text-decoration:none;color:inherit}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header{background:radial-gradient(900px 380px at 80% -10%,rgba(22,179,199,.22),transparent),linear-gradient(135deg,var(--navy),#071528);color:#fff;padding:52px 0 46px}
+  .back{display:inline-block;color:#9fd9e4;font-size:.9rem;margin-bottom:18px}
+  .eyebrow{color:var(--accent2);font-weight:700;letter-spacing:.6px;text-transform:uppercase;font-size:.78rem}
+  header h1{font-size:2.2rem;line-height:1.2;margin:10px 0 10px;font-weight:700}
+  header p.lead{color:#cddbe9;max-width:780px;font-size:1.05rem}
+  .meta{margin-top:20px;display:flex;flex-wrap:wrap;gap:22px;font-size:.9rem;color:#9fd9e4}
+  .meta b{color:#fff}
+  main{padding:40px 0 60px}
+  .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  @media(max-width:820px){.pgrid{grid-template-columns:1fr}header h1{font-size:1.7rem}}
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;
+         flex-direction:column;transition:transform .18s,box-shadow .18s;cursor:pointer}
+  .pcard:hover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(16,42,76,.13)}
+  .pcard .media{height:172px;background:#0e2746;overflow:hidden}
+  .pcard .media img{width:100%;height:100%;object-fit:cover;display:block}
+  .pcard .body{padding:18px 20px;display:flex;flex-direction:column;flex:1}
+  .pcard .yr{color:var(--muted);font-size:.8rem;font-weight:600}
+  .pcard h3{color:var(--navy);font-size:1.08rem;margin:5px 0 7px}
+  .pcard p{color:var(--muted);font-size:.89rem;flex:1}
+  .ptags{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .ptag{font-size:.72rem;padding:4px 9px;border-radius:30px;background:#0b1f3a;color:#bfe3ea}
+  .more{margin-top:13px;font-size:.82rem;font-weight:700;color:var(--accent)}
+  footer{padding:30px 0;color:var(--muted);font-size:.85rem;text-align:center;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="back" href="../../index.html">&larr; Back to portfolio</a>
+    <div class="eyebrow">Case-study collection</div>
+    <h1>Thermal &amp; Energy Engineering</h1>
+    <p class="lead">Computational thermodynamics done end to end — heat transfer and power cycles analysed from first
+    principles with real fluid properties, design charts and optimisation. No lab required; every result is reproducible
+    in Python.</p>
+    <div class="meta">
+      <div><b>3</b> case studies</div>
+      <div><b>Heat transfer · Power cycles</b></div>
+      <div><b>Python · CoolProp · IAPWS</b></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="pgrid">
+
+      <a class="pcard" href="../heat-exchanger-ntu/index.html">
+        <div class="media"><img src="../heat-exchanger-ntu/assets/thumb.png" alt="Heat exchanger temperature profile"></div>
+        <div class="body">
+          <div class="yr">Heat transfer · ε-NTU</div>
+          <h3>Counter-flow Heat Exchanger</h3>
+          <p>ε-NTU design cross-checked with LMTD (&lt;1% gap), real fluid properties and an area–performance design curve.</p>
+          <div class="ptags"><span class="ptag">ε-NTU · LMTD</span><span class="ptag">CoolProp</span></div>
+          <span class="more">Open the case study →</span>
+        </div>
+      </a>
+
+      <a class="pcard" href="../rankine-cycle/index.html">
+        <div class="media"><img src="../rankine-cycle/assets/thumb.png" alt="Rankine cycle T-s diagram"></div>
+        <div class="body">
+          <div class="yr">Power cycles · Steam</div>
+          <h3>Steam Power Plant — Rankine Cycle</h3>
+          <p>T–s diagram, 33% efficiency, 0.88% back-work ratio, and the boiler-pressure / superheat / condenser optimisation.</p>
+          <div class="ptags"><span class="ptag">Rankine</span><span class="ptag">IAPWS-IF97</span></div>
+          <span class="more">Open the case study →</span>
+        </div>
+      </a>
+
+      <a class="pcard" href="../brayton-cycle/index.html">
+        <div class="media"><img src="../brayton-cycle/assets/thumb.png" alt="Brayton cycle T-s diagram"></div>
+        <div class="body">
+          <div class="yr">Power cycles · Gas turbine</div>
+          <h3>Gas-Turbine — Brayton Cycle</h3>
+          <p>The cycle behind the jet engine: efficiency, optimum pressure ratio, 56% back-work ratio, and the link to propulsion.</p>
+          <div class="ptags"><span class="ptag">Brayton</span><span class="ptag">Aerospace link</span></div>
+          <span class="more">Open the case study →</span>
+        </div>
+      </a>
+
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">Esteban López — Industrial Engineering · Thermal &amp; Energy Engineering case studies</div>
+</footer>
+</body>
+</html>
